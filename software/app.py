@@ -1,8 +1,10 @@
 import os
 import sys
 import datetime
+import json
+import queue
 from functools import wraps
-from flask import Flask, request, jsonify, render_template, redirect, url_for, session, abort
+from flask import Flask, request, jsonify, render_template, redirect, url_for, session, abort, Response
 from flask_sqlalchemy import SQLAlchemy
 from flask_migrate import Migrate
 from werkzeug.security import generate_password_hash, check_password_hash
@@ -41,13 +43,15 @@ class Card(db.Model):
     number = db.Column(db.String(50), unique=True, nullable=False)
     active = db.Column(db.Boolean, default=True, nullable=False)
 
-# In-memory store for the dashboard (latest scan)
-latest_scan_data = {
-    "number": None,
-    "access": None,
-    "timestamp": None,
-    "id": 0
-}
+class AccessLog(db.Model):
+    __tablename__ = 'access_logs'
+    id = db.Column(db.Integer, primary_key=True)
+    number = db.Column(db.String(50), nullable=False)
+    access = db.Column(db.String(20), nullable=False)
+    timestamp = db.Column(db.DateTime, default=datetime.datetime.utcnow)
+
+# SSE client queues
+sse_clients = []
 
 # --- AUTH & RBAC DECORATORS ---
 
@@ -169,23 +173,63 @@ def verify():
     
     number = str(data['number'])
     card = Card.query.filter_by(number=number).first()
-    access_status = "granted" if card and card.active else "denied"
+    access_status = "granted" if card and card.active else "denied"   
+ 
+    new_log = AccessLog(number=number, access=access_status)
+    db.session.add(new_log)
+    db.session.commit()
+
+    event_data = {
+        "id": new_log.id,
+        "number": number,
+        "access": access_status,
+        "timestamp": new_log.timestamp.strftime("%H:%M:%S")
+    }
     
-    global latest_scan_data
-    latest_scan_data["id"] += 1
-    latest_scan_data["number"] = number
-    latest_scan_data["access"] = access_status
-    latest_scan_data["timestamp"] = datetime.datetime.now().strftime("%H:%M:%S")
+    for q in sse_clients:
+        q.put({"success": True, "scan": event_data})
 
     print(f"Received number: {number}", file=sys.stderr)
     print(f"Access: {access_status.upper()}", file=sys.stderr)
     
     return jsonify({"success": True, "access": access_status})
 
-@app.route('/latest-scan', methods=['GET'])
+@app.route('/api/access-logs', methods=['GET'])
 @login_required
-def latest_scan():
-    return jsonify(latest_scan_data)
+def access_logs():
+    logs = AccessLog.query.order_by(AccessLog.timestamp.desc()).limit(15).all()
+    logs_data = [{
+        "id": log.id,
+        "number": log.number,
+        "access": log.access,
+        "timestamp": log.timestamp.strftime("%H:%M:%S")
+    } for log in logs]
+    
+    return jsonify({
+        "success": True,
+        "logs": logs_data
+    })
+
+@app.route('/api/scan-events', methods=['GET'])
+@login_required
+def scan_events():
+    def stream():
+        q = queue.Queue()
+        sse_clients.append(q)
+        try:
+            while True:
+                try:
+                    data = q.get(timeout=15)
+                    yield f"data: {json.dumps(data)}\n\n"
+                except queue.Empty:
+                    yield ": ping\n\n"
+        except GeneratorExit:
+            pass
+        finally:
+            if q in sse_clients:
+                sse_clients.remove(q)
+
+    return Response(stream(), mimetype='text/event-stream')
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000)

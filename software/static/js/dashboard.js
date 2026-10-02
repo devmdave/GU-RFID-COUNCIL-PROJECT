@@ -1,4 +1,3 @@
-let lastScanId = 0;
 let modalTimeout;
 
 const modalOverlay = document.getElementById('access-modal');
@@ -10,65 +9,47 @@ const modalCardNumber = document.getElementById('modal-card-number');
 const modalMessage = document.getElementById('modal-message');
 const modalBadge = document.getElementById('modal-badge');
 
-const lastScanContent = document.getElementById('last-scan-content');
 const activityTbody = document.getElementById('activity-tbody');
 
-// Initialize polling
 document.addEventListener('DOMContentLoaded', () => {
-    startPolling();
+    fetchAccessLogsOnce();
+    initSSE();
 });
 
-function startPolling() {
-    setInterval(fetchLatestScan, 1000);
+function initSSE() {
+    const eventSource = new EventSource('/api/scan-events');
+    
+    eventSource.onmessage = function(event) {
+        try {
+            const data = JSON.parse(event.data);
+            if (data.success && data.scan) {
+                showModal(data.scan);
+            }
+        } catch (e) {
+            console.error("Error parsing SSE data", e);
+        }
+    };
+
+    eventSource.onerror = function(err) {
+        console.error("EventSource failed.", err);
+    };
 }
 
-async function fetchLatestScan() {
+async function fetchAccessLogsOnce() {
     try {
-        const response = await fetch('/latest-scan');
-        if (!response.ok) {
-            if (response.status === 401) {
-                window.location.href = '/login';
-            }
-            return;
-        }
-        
+        const response = await fetch('/api/access-logs');
+        if (!response.ok) return;
         const data = await response.json();
         
-        // If there's a new scan
-        if (data.id && data.id > lastScanId) {
-            lastScanId = data.id;
-            handleNewScan(data);
+        if (data.success && data.logs && data.logs.length > 0) {
+            // Reverse so oldest are inserted first, ending up properly ordered at top
+            data.logs.reverse().forEach(log => {
+                addToActivityTable(log);
+            });
         }
-    } catch (error) {
-        console.error("Error fetching latest scan:", error);
+    } catch (e) {
+        console.error("Error fetching access logs:", e);
     }
-}
-
-function handleNewScan(data) {
-    updateLastScan(data);
-    addToActivityTable(data);
-    showModal(data);
-}
-
-function updateLastScan(data) {
-    const isGranted = data.access === 'granted';
-    const statusClass = isGranted ? 'text-green' : 'text-red';
-    const statusText = isGranted ? 'GRANTED' : 'DENIED';
-    
-    lastScanContent.innerHTML = `
-        <div class="scan-details-block">
-            <p class="text-gray text-sm m-0">Card Number:</p>
-            <p class="font-space text-lg m-0 mt-1">${data.number}</p>
-        </div>
-        <div class="scan-details-block">
-            <p class="text-gray text-sm m-0">Status:</p>
-            <p class="font-space text-lg m-0 mt-1 ${statusClass}">${statusText}</p>
-        </div>
-        <div class="scan-details-block">
-            <p class="text-gray text-sm m-0">Time:</p>
-            <p class="font-space text-lg m-0 mt-1">${data.timestamp}</p>
-        </div>
-    `;
 }
 
 function addToActivityTable(data) {
