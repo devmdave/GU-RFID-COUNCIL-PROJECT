@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RFID ACCESS - Login</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+</head>
+<body class="login-body">
+    <div class="login-container">
+        <div class="login-card glass-panel">
+            <div class="login-header">
+                <i data-lucide="shield-check" class="login-icon"></i>
+                <h1 class="font-space">RFID ACCESS</h1>
+                <p class="subtitle">SECURE ACCESS CONTROL SYSTEM</p>
+            </div>
+            
+            {% if error %}
+            <div class="error-msg">
+                <i data-lucide="alert-circle"></i> {{ error }}
+            </div>
+            {% endif %}
+            
+            <form action="{{ url_for('login') }}" method="POST" class="login-form">
+                <div class="input-group">
+                    <label for="username">Username</label>
+                    <div class="input-wrapper">
+                        <i data-lucide="user"></i>
+                        <input type="text" id="username" name="username" placeholder="Enter username" required>
+                    </div>
+                </div>
+                <div class="input-group">
+                    <label for="password">Password</label>
+                    <div class="input-wrapper">
+                        <i data-lucide="lock"></i>
+                        <input type="password" id="password" name="password" placeholder="Enter password" required>
+                    </div>
+                </div>
+                <button type="submit" class="btn-primary font-space">
+                    LOGIN <i data-lucide="arrow-right"></i>
+                </button>
+            </form>
+        </div>
+    </div>
+    <script>
+        lucide.createIcons();
+    </script>
+</body>
+</html>
