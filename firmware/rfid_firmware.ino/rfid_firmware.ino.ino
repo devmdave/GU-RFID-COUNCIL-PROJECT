@@ -289,6 +289,7 @@ bool connectWiFi() {
   Serial.print("IP Address: ");
   Serial.println(WiFi.localIP());
   Serial.println();
+  digitalWrite(LED_BUILTIN, LOW);  
   return true;
 }
 
@@ -679,6 +680,7 @@ void setup() {
     key.keyByte[i] = ndefKey[i];
   }
   Serial.println("RC522 initialized.");
+  pinMode(LED_BUILTIN, OUTPUT);
 
   bool wifiConnected = connectWiFi();
   if (!wifiConnected) {
