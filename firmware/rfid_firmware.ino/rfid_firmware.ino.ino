@@ -4,6 +4,7 @@
 #include <ESP8266HTTPClient.h>
 #include <LittleFS.h>
 #include <ArduinoJson.h>
+#include <ESP8266WebServer.h>
 
 // =====================================================
 // DEFAULT CONFIGURATION
@@ -19,6 +20,7 @@ const char* CONFIG_FILE = "/config.json";
 String WIFI_SSID;
 String WIFI_PASSWORD;
 String SERVER_URL;
+ESP8266WebServer statusServer(80);
 
 // =====================================================
 // RC522 PINS
@@ -52,6 +54,7 @@ bool connectWiFi();
 String readNDEFText();
 bool verifyCard(String number);
 bool checkForConfigCommand();
+void handleStatus();
 
 // =====================================================
 // DEFAULT CONFIG
@@ -645,10 +648,25 @@ bool verifyCard(String number) {
   return false;
 }
 
+void handleStatus() {
+  JsonDocument doc;
+
+  doc["status"] = "online";
+  doc["device"] = "NodeMCU";
+  doc["ip"] = WiFi.localIP().toString();
+  doc["uptime"] = millis() / 1000;
+
+  String response;
+  serializeJson(doc, response);
+
+  statusServer.send(200, "application/json", response);
+}
+
+
+
 // =====================================================
 // SETUP
 // =====================================================
-
 void setup() {
   Serial.begin(115200);
   delay(1000);
@@ -680,12 +698,21 @@ void setup() {
     key.keyByte[i] = ndefKey[i];
   }
   Serial.println("RC522 initialized.");
-  pinMode(LED_BUILTIN, OUTPUT);
+
 
   bool wifiConnected = connectWiFi();
   if (!wifiConnected) {
     Serial.println("\nWi-Fi not connected.");
     Serial.println("You can type CONFIG anytime through USB.\n");
+  }
+  if (wifiConnected) {
+    statusServer.on("/status", HTTP_GET, handleStatus);
+    statusServer.begin();
+
+    Serial.println("Wireless status server started.");
+    Serial.print("Status URL: http://");
+    Serial.print(WiFi.localIP());
+    Serial.println("/status");
   }
 
   Serial.println("\n====================================");
@@ -699,6 +726,7 @@ void setup() {
 // =====================================================
 
 void loop() {
+  statusServer.handleClient();
   if (checkForConfigCommand()) {
     return;
   }

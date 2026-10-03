@@ -79,7 +79,7 @@
             <section class="config-panel glass-panel" style="display: flex; flex-direction: column; height: 100%;">
                 <div class="card-header border-bottom pb-3" style="display: flex; justify-content: space-between; align-items: center;">
                     <div style="display: flex; align-items: center; gap: 10px;">
-                        <h3 class="font-space m-0 text-gray">SERIAL MONITOR</h3>
+                        <h3 class="font-space m-0 text-gray">USB DEVICE</h3>
                         <i data-lucide="terminal" class="text-gray"></i>
                     </div>
                     <div style="display: flex; align-items: center; gap: 5px; font-size: 12px; font-weight: bold;">
@@ -87,10 +87,32 @@
                         <span id="serial-status-text" class="text-gray">DISCONNECTED</span>
                     </div>
                 </div>
-                <div class="mt-2 text-sm text-gray" id="serial-port-info" style="margin-bottom: 10px;">
-                    No port selected • 115200 baud
+                
+                <div id="device-info-container" class="mt-3 mb-3 p-3" style="background: rgba(255,255,255,0.05); border-radius: 4px; border: 1px solid rgba(255,255,255,0.1);">
+                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                        <div>
+                            <div style="font-weight: bold; margin-bottom: 5px; color: var(--text-light);" id="device-name-display">NodeMCU Not Detected</div>
+                            <div class="text-sm text-gray" id="serial-port-info">No port selected • 115200 baud</div>
+                        </div>
+                        <div id="auto-detected-badge" style="display: none; background: rgba(0, 255, 0, 0.1); color: #0f0; padding: 2px 8px; border-radius: 12px; font-size: 11px; font-weight: bold; border: 1px solid rgba(0, 255, 0, 0.2);">
+                            Auto-detected
+                        </div>
+                    </div>
+                    
+                    <!-- Manual Fallback -->
+                    <div id="manual-fallback-container" style="margin-top: 15px; padding-top: 15px; border-top: 1px dashed rgba(255,255,255,0.1); display: none;">
+                        <label class="text-gray text-sm" style="display: block; margin-bottom: 5px;">Manual Override:</label>
+                        <div style="display: flex; gap: 10px;">
+                            <select id="serial_port" style="flex-grow: 1; padding: 8px; background: rgba(0,0,0,0.2); border: 1px solid rgba(255,255,255,0.1); color: white; border-radius: 4px;">
+                                <option value="">Select COM Port...</option>
+                            </select>
+                            <button type="button" id="refresh-ports" style="padding: 8px 15px; background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2); color: white; border-radius: 4px; cursor: pointer;">Refresh</button>
+                        </div>
+                    </div>
                 </div>
-                <div id="serial-output" style="flex-grow: 1; background: rgba(0,0,0,0.5); border: 1px solid rgba(255,255,255,0.1); border-radius: 4px; padding: 10px; font-family: monospace; color: #0f0; font-size: 13px; overflow-y: auto; height: 400px; white-space: pre-wrap; word-wrap: break-word;"></div>
+                
+                <div style="margin-bottom: 5px; font-size: 12px; color: var(--text-gray); font-weight: bold;">Serial Monitor</div>
+                <div id="serial-output" style="flex-grow: 1; background: rgba(0,0,0,0.5); border: 1px solid rgba(255,255,255,0.1); border-radius: 4px; padding: 10px; font-family: monospace; color: #0f0; font-size: 13px; overflow-y: auto; height: 300px; white-space: pre-wrap; word-wrap: break-word;"></div>
                 <div style="display: flex; justify-content: flex-end; margin-top: 15px;">
                     <button type="button" id="clear-serial-btn" style="padding: 8px 15px; background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2); color: white; border-radius: 4px; cursor: pointer;">Clear Output</button>
                 </div>
@@ -138,50 +160,68 @@
 
         let serialEventSource = null;
 
-        function startSerialMonitor(port) {
+        function updateDeviceUI(status) {
+            const statusText = document.getElementById('serial-status-text');
+            const statusDot = document.getElementById('serial-status-dot');
+            const portInfo = document.getElementById('serial-port-info');
+            const deviceName = document.getElementById('device-name-display');
+            const autoBadge = document.getElementById('auto-detected-badge');
+            const manualFallback = document.getElementById('manual-fallback-container');
+            
+            if (status.connected && status.port) {
+                statusText.textContent = 'CONNECTED';
+                statusDot.style.backgroundColor = 'var(--status-green)';
+                portInfo.textContent = `${status.port} • 115200 baud`;
+                
+                if (status.auto_detected) {
+                    deviceName.textContent = 'NodeMCU';
+                    autoBadge.style.display = 'block';
+                    manualFallback.style.display = 'none';
+                } else {
+                    deviceName.textContent = 'Custom Device';
+                    autoBadge.style.display = 'none';
+                    manualFallback.style.display = 'block';
+                }
+            } else {
+                statusText.textContent = 'DISCONNECTED';
+                statusDot.style.backgroundColor = 'var(--status-red)';
+                portInfo.textContent = 'No port selected • 115200 baud';
+                deviceName.textContent = 'NodeMCU Not Detected';
+                autoBadge.style.display = 'none';
+                manualFallback.style.display = 'block';
+                
+                fetchSerialPorts();
+            }
+        }
+
+        function startSerialMonitor(port = 'auto') {
             if (serialEventSource) {
                 serialEventSource.close();
             }
             
             const output = document.getElementById('serial-output');
-            const statusText = document.getElementById('serial-status-text');
-            const statusDot = document.getElementById('serial-status-dot');
-            const portInfo = document.getElementById('serial-port-info');
-            
-            if (!port) {
-                statusText.textContent = 'WAITING';
-                statusDot.style.backgroundColor = 'var(--text-muted)';
-                portInfo.textContent = 'No port selected • 115200 baud';
-                return;
-            }
-
-            statusText.textContent = 'CONNECTING...';
-            statusDot.style.backgroundColor = 'var(--accent-cyan)';
-            portInfo.textContent = `${port} • 115200 baud`;
             
             serialEventSource = new EventSource(`/api/device/serial-stream?port=${port}`);
             
-            serialEventSource.onopen = () => {
-                statusText.textContent = 'CONNECTED';
-                statusDot.style.backgroundColor = 'var(--status-green)';
-            };
+            serialEventSource.onopen = () => {};
             
             serialEventSource.onmessage = (event) => {
                 try {
                     const data = JSON.parse(event.data);
-                    if (data.line) {
+                    
+                    if (data.type === 'status') {
+                        updateDeviceUI(data);
+                    } else if (data.type === 'serial' && data.line) {
                         const lineDiv = document.createElement('div');
                         const now = new Date();
                         const timeStr = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}:${now.getSeconds().toString().padStart(2, '0')}`;
                         lineDiv.textContent = `${timeStr}  ${data.line}`;
                         output.appendChild(lineDiv);
                         
-                        // Keep max 500 lines
                         while (output.childNodes.length > 500) {
                             output.removeChild(output.firstChild);
                         }
                         
-                        // Auto-scroll
                         output.scrollTop = output.scrollHeight;
                     }
                 } catch (err) {
@@ -190,13 +230,44 @@
             };
             
             serialEventSource.onerror = (err) => {
-                statusText.textContent = 'DISCONNECTED';
-                statusDot.style.backgroundColor = 'var(--status-red)';
+                updateDeviceUI({ connected: false });
             };
         }
 
+        async function fetchSerialPorts() {
+            try {
+                const res = await fetch('/api/device/serial-ports');
+                const data = await res.json();
+                
+                const select = document.getElementById('serial_port');
+                if (!select) return;
+                
+                const currentValue = select.value;
+                select.innerHTML = '<option value="">Select COM Port...</option>';
+                
+                if (data.success && data.devices) {
+                    data.devices.forEach(p => {
+                        const opt = document.createElement('option');
+                        opt.value = p.port;
+                        let desc = p.description ? ` - ${p.description}` : '';
+                        if (p.device === 'NodeMCU') desc += ' (NodeMCU)';
+                        opt.textContent = `${p.port}${desc}`;
+                        select.appendChild(opt);
+                    });
+                    if (data.selected_port) {
+                        select.value = data.selected_port;
+                    } else if (currentValue) {
+                        select.value = currentValue;
+                    }
+                }
+            } catch (err) {
+                console.error("Error fetching serial ports:", err);
+            }
+        }
+
         async function initDeviceConfig() {
-            await fetchSerialPorts();
+            startSerialMonitor('auto');
+            fetchSerialPorts();
             
             const selectPort = document.getElementById('serial_port');
             if (selectPort) {
@@ -256,7 +327,7 @@
                             method: 'POST',
                             headers: { 'Content-Type': 'application/json' },
                             body: JSON.stringify({
-                                port: document.getElementById('serial_port').value,
+                                port: document.getElementById('serial_port').value || 'auto',
                                 wifi_ssid: document.getElementById('wifi_ssid').value,
                                 wifi_password: document.getElementById('wifi_password').value,
                                 server_url: document.getElementById('server_url').value

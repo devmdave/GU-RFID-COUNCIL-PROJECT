@@ -279,10 +279,8 @@ def configure_usb():
 @login_required
 @role_required('superadmin', 'admin')
 def serial_stream():
-    port = request.args.get('port')
-    if not port:
-        return jsonify({"error": "Missing port"}), 400
-        
+    port = request.args.get('port', 'auto')
+    
     def generate():
         try:
             r = requests.get(f'http://host.docker.internal:8765/stream?port={port}', stream=True, timeout=60)
@@ -291,14 +289,14 @@ def serial_stream():
                     err = r.json().get("error", "Connection failed")
                 except:
                     err = "Connection failed"
-                yield f"data: {json.dumps({'line': f'ERROR: {err}'})}\n\n"
+                yield f"data: {json.dumps({'type': 'serial', 'line': f'ERROR: {err}'})}\n\n"
                 return
                 
             for line in r.iter_lines(decode_unicode=True):
                 if line:
                     yield f"{line}\n\n"
         except requests.RequestException:
-            yield "data: {\"line\": \"ERROR: Serial Bridge disconnected.\"}\n\n"
+            yield f"data: {json.dumps({'type': 'serial', 'line': 'ERROR: Serial Bridge disconnected.'})}\n\n"
             
     return Response(generate(), mimetype='text/event-stream')
 

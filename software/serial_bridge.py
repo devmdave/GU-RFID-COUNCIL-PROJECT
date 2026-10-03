@@ -11,12 +11,89 @@ app = Flask(__name__)
 ser_lock = threading.Lock()
 active_ser = None
 active_port = None
+auto_detected_port = None
 stream_queues = []
 
+def is_nodemcu(p):
+    desc = (p.description or "").upper()
+    hwid = (p.hwid or "").upper()
+    mfg = (p.manufacturer or "").upper()
+    
+    if "CH340" in desc or "CP210" in desc or "NODEMCU" in desc or "ESP8266" in desc:
+        return True
+    if "1A86:7523" in hwid or "10C4:EA60" in hwid:
+        return True
+    if "WCH.CN" in mfg or "SILICON LABS" in mfg:
+        return True
+    return False
+
+def scan_and_connect():
+    global active_ser, active_port, auto_detected_port
+    
+    ports = serial.tools.list_ports.comports()
+    port_devices = [p.device for p in ports]
+    
+    if active_port and active_port not in port_devices:
+        with ser_lock:
+            if active_ser:
+                try:
+                    active_ser.close()
+                except:
+                    pass
+            active_ser = None
+            active_port = None
+            auto_detected_port = None
+            
+            for q in list(stream_queues):
+                try:
+                    q.put_nowait({"type": "status", "connected": False})
+                except queue.Full:
+                    pass
+                    
+    if not active_port:
+        nodemcu_port = None
+        for p in ports:
+            if is_nodemcu(p):
+                nodemcu_port = p.device
+                break
+                
+        if nodemcu_port:
+            try:
+                print("\nDetected serial devices:")
+                for p in ports:
+                    print(f"\n{p.device}")
+                    print(f"  description: {p.description}")
+                    print(f"  manufacturer: {p.manufacturer}")
+                    if p.vid:
+                        print(f"  VID: {p.vid:04X}")
+                        print(f"  PID: {p.pid:04X}")
+                print(f"\nSelected:\n{nodemcu_port}\n")
+                
+                with ser_lock:
+                    active_ser = serial.Serial(nodemcu_port, 115200, timeout=1)
+                    active_port = nodemcu_port
+                    auto_detected_port = nodemcu_port
+                    
+                status_msg = {
+                    "type": "status",
+                    "connected": True,
+                    "port": nodemcu_port,
+                    "auto_detected": True
+                }
+                for q in list(stream_queues):
+                    try:
+                        q.put_nowait(status_msg)
+                    except queue.Full:
+                        pass
+            except Exception as e:
+                pass
+
 def serial_reader_thread():
-    global active_ser, active_port
+    global active_ser, active_port, auto_detected_port
     buffer = ""
     while True:
+        scan_and_connect()
+        
         with ser_lock:
             if active_ser and active_ser.is_open:
                 try:
@@ -29,7 +106,7 @@ def serial_reader_thread():
                             if line and "PASSWORD=" not in line.upper():
                                 for q in list(stream_queues):
                                     try:
-                                        q.put_nowait(line)
+                                        q.put_nowait({"type": "serial", "line": line})
                                     except queue.Full:
                                         pass
                 except Exception as e:
@@ -39,11 +116,12 @@ def serial_reader_thread():
                         pass
                     active_ser = None
                     active_port = None
+                    auto_detected_port = None
                     buffer = ""
                     for q in list(stream_queues):
                         try:
-                            q.put_nowait(f"ERROR: Serial disconnected ({str(e)})")
-                            q.put_nowait(None)
+                            q.put_nowait({"type": "serial", "line": f"ERROR: Serial disconnected ({str(e)})"})
+                            q.put_nowait({"type": "status", "connected": False})
                         except queue.Full:
                             pass
         time.sleep(0.05)
@@ -53,40 +131,77 @@ threading.Thread(target=serial_reader_thread, daemon=True).start()
 @app.route('/ports', methods=['GET'])
 def get_ports():
     ports = serial.tools.list_ports.comports()
-    port_list = [{"device": p.device, "description": p.description} for p in ports]
-    return jsonify({"success": True, "ports": port_list})
+    devices = []
+    for p in ports:
+        is_node = is_nodemcu(p)
+        devices.append({
+            "port": p.device,
+            "device": "NodeMCU" if is_node else "Unknown",
+            "detected": is_node,
+            "vid": f"{p.vid:04X}" if p.vid else "",
+            "pid": f"{p.pid:04X}" if p.pid else "",
+            "manufacturer": p.manufacturer or "",
+            "description": p.description or ""
+        })
+        
+    return jsonify({
+        "success": True,
+        "devices": devices,
+        "selected_port": active_port,
+        "auto_detected": bool(active_port and active_port == auto_detected_port)
+    })
 
 @app.route('/stream')
 def stream():
     port = request.args.get('port')
-    if not port:
-        return jsonify({"error": "Missing port parameter"}), 400
-        
-    global active_ser, active_port
     
-    with ser_lock:
-        if active_port != port:
-            if active_ser:
+    global active_ser, active_port, auto_detected_port
+    
+    if port and port != "auto":
+        with ser_lock:
+            if active_port != port:
+                if active_ser:
+                    try:
+                        active_ser.close()
+                    except:
+                        pass
                 try:
-                    active_ser.close()
-                except:
-                    pass
-            try:
-                active_ser = serial.Serial(port, 115200, timeout=1)
-                active_port = port
-            except Exception as e:
-                return jsonify({"error": str(e)}), 400
+                    active_ser = serial.Serial(port, 115200, timeout=1)
+                    active_port = port
+                    auto_detected_port = None
+                    
+                    status_msg = {
+                        "type": "status",
+                        "connected": True,
+                        "port": port,
+                        "auto_detected": False
+                    }
+                    for q in list(stream_queues):
+                        try:
+                            q.put_nowait(status_msg)
+                        except queue.Full:
+                            pass
+                except Exception as e:
+                    return jsonify({"error": str(e)}), 400
 
     def generate():
         q = queue.Queue(maxsize=100)
         stream_queues.append(q)
+        
+        q.put_nowait({
+            "type": "status",
+            "connected": bool(active_port),
+            "port": active_port,
+            "auto_detected": bool(active_port and active_port == auto_detected_port)
+        })
+        
         try:
             while True:
                 try:
-                    line = q.get(timeout=10)
-                    if line is None:
+                    msg = q.get(timeout=10)
+                    if msg is None:
                         break
-                    yield f"data: {json.dumps({'line': line})}\n\n"
+                    yield f"data: {json.dumps(msg)}\n\n"
                 except queue.Empty:
                     yield ": ping\n\n"
         except GeneratorExit:
@@ -108,11 +223,17 @@ def configure():
     wifi_password = data.get('wifi_password')
     server_url = data.get('server_url')
     
-    if not port or not wifi_ssid or not wifi_password or not server_url:
-        return jsonify({"success": False, "error": "All fields are required"}), 400
-        
-    global active_ser, active_port
+    global active_ser, active_port, auto_detected_port
     
+    if port == 'auto' or not port:
+        port = active_port
+        
+    if not port:
+        return jsonify({"success": False, "error": "No NodeMCU connected or port selected"}), 400
+        
+    if not wifi_ssid or not wifi_password or not server_url:
+        return jsonify({"success": False, "error": "All configuration fields are required"}), 400
+        
     with ser_lock:
         if active_port != port:
             if active_ser:
@@ -123,6 +244,7 @@ def configure():
             try:
                 active_ser = serial.Serial(port, 115200, timeout=2)
                 active_port = port
+                auto_detected_port = None
                 time.sleep(2)
             except serial.SerialException as e:
                 return jsonify({"success": False, "error": f"Unable to connect to NodeMCU on {port}. Is it busy?"}), 400
@@ -135,13 +257,12 @@ def configure():
                 chunk = active_ser.read(active_ser.in_waiting).decode('utf-8', errors='ignore')
                 response += chunk
                 
-                # Mirror output to UI live stream while locked!
                 for l in chunk.split('\n'):
                     l = l.strip()
                     if l and "PASSWORD=" not in l.upper():
                         for q in list(stream_queues):
                             try:
-                                q.put_nowait(l)
+                                q.put_nowait({"type": "serial", "line": l})
                             except queue.Full:
                                 pass
                             
