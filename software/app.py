@@ -3,6 +3,9 @@ import sys
 import datetime
 import json
 import queue
+import re
+import time
+import requests
 from functools import wraps
 from flask import Flask, request, jsonify, render_template, redirect, url_for, session, abort, Response
 from flask_sqlalchemy import SQLAlchemy
@@ -123,6 +126,12 @@ def logout():
 def dashboard():
     return render_template('dashboard.html')
 
+@app.route('/settings')
+@login_required
+@role_required('superadmin', 'admin')
+def settings():
+    return render_template('settings.html')
+
 @app.route('/users')
 @login_required
 @role_required('superadmin', 'admin')
@@ -171,7 +180,9 @@ def verify():
     if not data or 'number' not in data:
         return jsonify({"success": False, "error": "Missing number in payload"}), 400
     
-    number = str(data['number'])
+    number = str(data['number']).strip()
+    if not number:
+        return jsonify({"success": False, "error": "Empty number"}), 400
     card = Card.query.filter_by(number=number).first()
     access_status = "granted" if card and card.active else "denied"   
  
@@ -230,6 +241,39 @@ def scan_events():
                 sse_clients.remove(q)
 
     return Response(stream(), mimetype='text/event-stream')
+
+def is_valid_url(url):
+    regex = re.compile(
+        r'^https?://'
+        r'(?:(?:[A-Z0-9](?:[A-Z0-9-]{0,61}[A-Z0-9])?\.)+[A-Z]{2,6}\.?|'
+        r'localhost|'
+        r'\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})'
+        r'(?::\d+)?'
+        r'(?:/?|[/?]\S+)$', re.IGNORECASE)
+    return url is not None and regex.search(url)
+
+@app.route('/api/device/serial-ports', methods=['GET'])
+@login_required
+def get_serial_ports():
+    try:
+        r = requests.get('http://host.docker.internal:8765/ports', timeout=5)
+        return jsonify(r.json()), r.status_code
+    except requests.RequestException:
+        return jsonify({"success": False, "error": "Serial Bridge is not running on host."}), 502
+
+@app.route('/api/device/configure-usb', methods=['POST'])
+@login_required
+@role_required('superadmin', 'admin')
+def configure_usb():
+    data = request.get_json()
+    if not data:
+        return jsonify({"success": False, "error": "Missing payload"}), 400
+        
+    try:
+        r = requests.post('http://host.docker.internal:8765/configure', json=data, timeout=15)
+        return jsonify(r.json()), r.status_code
+    except requests.RequestException:
+        return jsonify({"success": False, "error": "Serial Bridge is not running on host or timed out."}), 502
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000)

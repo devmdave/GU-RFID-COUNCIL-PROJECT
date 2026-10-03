@@ -5,641 +5,310 @@
 #include <LittleFS.h>
 #include <ArduinoJson.h>
 
-// ==================================================
-// DEFAULT / FALLBACK CONFIGURATION
-// ==================================================
-// Used when:
-// 1. No saved configuration exists
-// 2. Saved WiFi cannot connect
-// 3. Saved configuration is invalid
+// =====================================================
+// DEFAULT CONFIGURATION
+// =====================================================
 
-const char* DEFAULT_WIFI_SSID = "MDPHONE";
-const char* DEFAULT_WIFI_PASSWORD = "$$md2010";
-const char* DEFAULT_SERVER_URL = "http://10.122.236.162:5000";
+const char* DEFAULT_WIFI_SSID     = "Daves_5G";
+const char* DEFAULT_WIFI_PASSWORD = "guddu+2375";
+const char* DEFAULT_SERVER_URL    = "http://192.168.43.125:5000";
 
-// ==================================================
-// CURRENT CONFIGURATION
-// ==================================================
+const char* CONFIG_FILE = "/config.json";
 
+// Current configuration
 String WIFI_SSID;
 String WIFI_PASSWORD;
 String SERVER_URL;
 
-const char* CONFIG_FILE = "/config.json";
-
-
-// ==================================================
-// RFID CONFIGURATION
-// ==================================================
+// =====================================================
+// RC522 PINS
+// =====================================================
 
 #define SS_PIN  D2
 #define RST_PIN D1
 
 MFRC522 rfid(SS_PIN, RST_PIN);
 
+// =====================================================
+// MIFARE CLASSIC KEY A
+// =====================================================
+
 MFRC522::MIFARE_Key key;
 
 byte ndefKey[6] = {
-  0xD3,
-  0xF7,
-  0xD3,
-  0xF7,
-  0xD3,
-  0xF7
+  0xD3, 0xF7, 0xD3, 0xF7, 0xD3, 0xF7
 };
 
+// =====================================================
+// FUNCTION DECLARATIONS
+// =====================================================
 
-// ==================================================
-// SET DEFAULT CONFIG
-// ==================================================
+void setDefaultConfig();
+bool loadSavedConfig();
+bool saveConfig();
+void printCurrentConfig();
+void serialConfigMode();
+bool connectWiFi();
+String readNDEFText();
+bool verifyCard(String number);
+bool checkForConfigCommand();
+
+// =====================================================
+// DEFAULT CONFIG
+// =====================================================
 
 void setDefaultConfig() {
-
   WIFI_SSID = DEFAULT_WIFI_SSID;
   WIFI_PASSWORD = DEFAULT_WIFI_PASSWORD;
   SERVER_URL = DEFAULT_SERVER_URL;
-
-  Serial.println();
-  Serial.println("Using DEFAULT firmware configuration.");
 }
 
+// =====================================================
+// SAVE CONFIG TO LITTLEFS
+// =====================================================
 
-// ==================================================
-// LOAD SAVED CONFIGURATION
-// ==================================================
+bool saveConfig() {
+  Serial.println();
+  Serial.println("Saving configuration...");
+
+  File file = LittleFS.open(CONFIG_FILE, "w");
+  if (!file) {
+    Serial.println("ERROR: Could not open config file.");
+    return false;
+  }
+
+  JsonDocument doc;
+  doc["ssid"] = WIFI_SSID;
+  doc["password"] = WIFI_PASSWORD;
+  doc["server"] = SERVER_URL;
+
+  if (serializeJson(doc, file) == 0) {
+    Serial.println("ERROR: Failed to write configuration.");
+    file.close();
+    return false;
+  }
+  file.close();
+  Serial.println("Configuration saved to LittleFS.");
+  return true;
+}
+
+// =====================================================
+// LOAD CONFIG FROM LITTLEFS
+// =====================================================
 
 bool loadSavedConfig() {
-
   if (!LittleFS.exists(CONFIG_FILE)) {
-
-    Serial.println(
-      "No saved configuration found."
-    );
-
+    Serial.println("No saved configuration found.");
     return false;
   }
 
-  File file = LittleFS.open(
-    CONFIG_FILE,
-    "r"
-  );
-
+  File file = LittleFS.open(CONFIG_FILE, "r");
   if (!file) {
-
-    Serial.println(
-      "Failed to open saved configuration."
-    );
-
+    Serial.println("ERROR: Could not open config file.");
     return false;
   }
 
-  StaticJsonDocument<512> doc;
-
-  DeserializationError error =
-    deserializeJson(doc, file);
-
+  JsonDocument doc;
+  DeserializationError error = deserializeJson(doc, file);
   file.close();
 
   if (error) {
-
-    Serial.print(
-      "Saved config JSON error: "
-    );
-
-    Serial.println(
-      error.c_str()
-    );
-
+    Serial.println("ERROR: Invalid configuration file.");
     return false;
   }
 
-  if (
-    !doc["wifi_ssid"].is<const char*>() ||
-    !doc["wifi_password"].is<const char*>() ||
-    !doc["server_url"].is<const char*>()
-  ) {
-
-    Serial.println(
-      "Saved configuration is incomplete."
-    );
-
+  if (!doc["ssid"].is<String>() || !doc["password"].is<String>() || !doc["server"].is<String>()) {
+    Serial.println("ERROR: Configuration fields missing.");
     return false;
   }
 
-  String savedSSID =
-    doc["wifi_ssid"].as<String>();
+  WIFI_SSID = doc["ssid"].as<String>();
+  WIFI_PASSWORD = doc["password"].as<String>();
+  SERVER_URL = doc["server"].as<String>();
 
-  String savedPassword =
-    doc["wifi_password"].as<String>();
+  Serial.println("Saved configuration loaded.");
+  return true;
+}
 
-  String savedServer =
-    doc["server_url"].as<String>();
+// =====================================================
+// PRINT CURRENT CONFIG
+// =====================================================
 
-  if (
-    savedSSID.length() == 0 ||
-    savedPassword.length() == 0 ||
-    savedServer.length() == 0
-  ) {
-
-    Serial.println(
-      "Saved configuration is invalid."
-    );
-
-    return false;
-  }
-
-  WIFI_SSID = savedSSID;
-  WIFI_PASSWORD = savedPassword;
-  SERVER_URL = savedServer;
-
+void printCurrentConfig() {
   Serial.println();
-  Serial.println(
-    "Saved configuration loaded."
-  );
-
-  Serial.print("Saved SSID: ");
+  Serial.println("========== CURRENT CONFIG ==========");
+  Serial.print("SSID   : ");
   Serial.println(WIFI_SSID);
-
-  Serial.print("Saved Server: ");
+  Serial.print("SERVER : ");
   Serial.println(SERVER_URL);
-
-  return true;
+  Serial.println("PASSWORD: ********");
+  Serial.println("====================================");
+  Serial.println();
 }
 
+// =====================================================
+// CHECK FOR CONFIG COMMAND
+// =====================================================
 
-// ==================================================
-// SAVE CONFIGURATION
-// ==================================================
-
-bool saveConfig(
-  String newSSID,
-  String newPassword,
-  String newServerURL
-) {
-
-  StaticJsonDocument<512> doc;
-
-  doc["wifi_ssid"] = newSSID;
-  doc["wifi_password"] = newPassword;
-  doc["server_url"] = newServerURL;
-
-  File file = LittleFS.open(
-    CONFIG_FILE,
-    "w"
-  );
-
-  if (!file) {
-
-    Serial.println(
-      "Failed to open configuration file."
-    );
-
+bool checkForConfigCommand() {
+  if (!Serial.available()) {
     return false;
   }
+  String command = Serial.readStringUntil('\n');
+  command.trim();
 
-  size_t written =
-    serializeJson(doc, file);
-
-  file.close();
-
-  if (written == 0) {
-
-    Serial.println(
-      "Failed to write configuration."
-    );
-
-    return false;
-  }
-
-  Serial.println(
-    "New configuration saved to LittleFS."
-  );
-
-  return true;
-}
-
-
-// ==================================================
-// TRY WIFI CONNECTION
-// ==================================================
-
-bool tryWiFi(
-  String ssid,
-  String password
-) {
-
-  Serial.println();
-  Serial.println("==============================");
-  Serial.println("       WIFI CONNECTION");
-  Serial.println("==============================");
-
-  Serial.print("SSID: ");
-  Serial.println(ssid);
-
-  WiFi.disconnect();
-
-  delay(300);
-
-  WiFi.mode(WIFI_STA);
-
-  WiFi.begin(
-    ssid.c_str(),
-    password.c_str()
-  );
-
-  int attempts = 0;
-
-  while (
-    WiFi.status() != WL_CONNECTED &&
-    attempts < 20
-  ) {
-
-    delay(500);
-
-    Serial.print(".");
-
-    attempts++;
-  }
-
-  Serial.println();
-
-  if (
-    WiFi.status() == WL_CONNECTED
-  ) {
-
-    Serial.println(
-      "WiFi connected!"
-    );
-
-    Serial.print(
-      "IP Address: "
-    );
-
-    Serial.println(
-      WiFi.localIP()
-    );
-
+  if (command.equalsIgnoreCase("CONFIG")) {
+    serialConfigMode();
     return true;
   }
-
-  Serial.println(
-    "WiFi connection failed."
-  );
-
-  WiFi.disconnect();
-
   return false;
 }
 
+// =====================================================
+// USB SERIAL CONFIGURATION MODE
+// =====================================================
 
-// ==================================================
-// CONNECT USING SAVED CONFIG,
-// THEN FALLBACK TO DEFAULT
-// ==================================================
+void serialConfigMode() {
+  Serial.println();
+  Serial.println("====================================");
+  Serial.println("      USB CONFIGURATION MODE");
+  Serial.println("====================================");
+  Serial.println("NodeMCU is now in configuration mode.");
+  Serial.println("Normal RFID operation is paused.");
+  Serial.println("Commands:");
+  Serial.println("SSID=<wifi-name>");
+  Serial.println("PASSWORD=<wifi-password>");
+  Serial.println("SERVER=<server-url>");
+  Serial.println("SAVE");
+  Serial.println("SHOW");
+  Serial.println("RESET");
+  Serial.println("EXIT");
+
+  while (true) {
+    if (Serial.available()) {
+      String line = Serial.readStringUntil('\n');
+      line.trim();
+
+      if (line.length() == 0) {
+        continue;
+      }
+
+      if (line.equalsIgnoreCase("EXIT")) {
+        Serial.println("Exiting configuration mode...");
+        return;
+      }
+      
+      if (line.equalsIgnoreCase("SHOW")) {
+        printCurrentConfig();
+        continue;
+      }
+      
+      if (line.equalsIgnoreCase("SAVE")) {
+        if (saveConfig()) {
+          Serial.println("CONFIGURATION SAVED SUCCESSFULLY");
+          Serial.println("Restarting NodeMCU...");
+          delay(1000);
+          ESP.restart();
+        } else {
+          Serial.println("ERROR: CONFIGURATION SAVE FAILED");
+        }
+        continue;
+      }
+      
+      if (line.equalsIgnoreCase("RESET")) {
+        LittleFS.remove(CONFIG_FILE);
+        Serial.println("Configuration deleted. Restarting...");
+        delay(1000);
+        ESP.restart();
+      }
+
+      int equalsIdx = line.indexOf('=');
+      if (equalsIdx > 0) {
+        String key = line.substring(0, equalsIdx);
+        String value = line.substring(equalsIdx + 1);
+        key.trim();
+        value.trim();
+
+        if (key.equalsIgnoreCase("SSID")) {
+          WIFI_SSID = value;
+          Serial.println("SSID updated in memory.");
+        }
+        else if (key.equalsIgnoreCase("PASSWORD")) {
+          WIFI_PASSWORD = value;
+          Serial.println("PASSWORD updated in memory.");
+        }
+        else if (key.equalsIgnoreCase("SERVER")) {
+          SERVER_URL = value;
+          Serial.println("SERVER updated in memory.");
+        }
+        else {
+          Serial.println("Unknown key.");
+        }
+      } else {
+        Serial.println("Invalid command format.");
+      }
+    }
+    yield();
+  }
+}
+
+// =====================================================
+// CONNECT WI-FI
+// =====================================================
 
 bool connectWiFi() {
-
-  // ------------------------------------------------
-  // First: Try currently loaded configuration
-  // ------------------------------------------------
-
   Serial.println();
-  Serial.println(
-    "Trying current configuration..."
-  );
+  Serial.print("Connecting to Wi-Fi: ");
+  Serial.println(WIFI_SSID);
 
-  if (
-    tryWiFi(
-      WIFI_SSID,
-      WIFI_PASSWORD
-    )
-  ) {
+  WiFi.mode(WIFI_STA);
+  WiFi.begin(WIFI_SSID.c_str(), WIFI_PASSWORD.c_str());
 
-    return true;
+  unsigned long startTime = millis();
+  while (WiFi.status() != WL_CONNECTED) {
+    if (Serial.available()) {
+      String command = Serial.readStringUntil('\n');
+      command.trim();
+      if (command.equalsIgnoreCase("CONFIG")) {
+        Serial.println("\nUSB CONFIG requested.");
+        serialConfigMode();
+        return false;
+      }
+    }
+
+    Serial.print(".");
+    delay(500);
+
+    if (millis() - startTime > 20000) {
+      Serial.println("\nWi-Fi connection timeout.");
+      return false;
+    }
   }
 
-  // ------------------------------------------------
-  // If current config failed, try defaults
-  // ------------------------------------------------
-
-  bool alreadyDefault =
-    WIFI_SSID == DEFAULT_WIFI_SSID &&
-    WIFI_PASSWORD == DEFAULT_WIFI_PASSWORD;
-
-  if (alreadyDefault) {
-
-    Serial.println(
-      "Current configuration is already default."
-    );
-
-    return false;
-  }
-
+  Serial.println("\nWi-Fi connected!");
+  Serial.print("IP Address: ");
+  Serial.println(WiFi.localIP());
   Serial.println();
-  Serial.println(
-    "Saved WiFi failed."
-  );
-
-  Serial.println(
-    "Trying DEFAULT WiFi..."
-  );
-
-  if (
-    tryWiFi(
-      DEFAULT_WIFI_SSID,
-      DEFAULT_WIFI_PASSWORD
-    )
-  ) {
-
-    // Use default values as current config
-    WIFI_SSID = DEFAULT_WIFI_SSID;
-    WIFI_PASSWORD = DEFAULT_WIFI_PASSWORD;
-    SERVER_URL = DEFAULT_SERVER_URL;
-
-    Serial.println(
-      "Fallback to DEFAULT configuration successful."
-    );
-
-    return true;
-  }
-
-  Serial.println();
-  Serial.println(
-    "DEFAULT WiFi also failed."
-  );
-
-  return false;
-}
-
-
-// ==================================================
-// FETCH LATEST CONFIG FROM FLASK
-// ==================================================
-
-bool fetchRemoteConfig() {
-
-  if (
-    WiFi.status() != WL_CONNECTED
-  ) {
-
-    Serial.println(
-      "Cannot fetch config: WiFi not connected."
-    );
-
-    return false;
-  }
-
-  String configURL =
-    SERVER_URL + "/device/config";
-
-  Serial.println();
-  Serial.println("==============================");
-  Serial.println("    FETCHING LATEST CONFIG");
-  Serial.println("==============================");
-
-  Serial.print(
-    "URL: "
-  );
-
-  Serial.println(
-    configURL
-  );
-
-  WiFiClient client;
-
-  HTTPClient http;
-
-  http.setTimeout(5000);
-
-  if (
-    !http.begin(
-      client,
-      configURL
-    )
-  ) {
-
-    Serial.println(
-      "Could not initialize HTTP."
-    );
-
-    return false;
-  }
-
-  http.addHeader(
-    "Accept",
-    "application/json"
-  );
-
-  int httpCode =
-    http.GET();
-
-  if (httpCode <= 0) {
-
-    Serial.print(
-      "Config request failed: "
-    );
-
-    Serial.println(
-      http.errorToString(
-        httpCode
-      )
-    );
-
-    http.end();
-
-    return false;
-  }
-
-  Serial.print(
-    "HTTP Status: "
-  );
-
-  Serial.println(
-    httpCode
-  );
-
-  if (
-    httpCode != HTTP_CODE_OK
-  ) {
-
-    Serial.println(
-      "Config endpoint returned an error."
-    );
-
-    http.end();
-
-    return false;
-  }
-
-  String response =
-    http.getString();
-
-  http.end();
-
-  Serial.println(
-    "Config received."
-  );
-
-  StaticJsonDocument<768> doc;
-
-  DeserializationError error =
-    deserializeJson(
-      doc,
-      response
-    );
-
-  if (error) {
-
-    Serial.print(
-      "Invalid config JSON: "
-    );
-
-    Serial.println(
-      error.c_str()
-    );
-
-    return false;
-  }
-
-  if (
-    !doc["success"].is<bool>() ||
-    !doc["success"].as<bool>()
-  ) {
-
-    Serial.println(
-      "Server returned unsuccessful configuration."
-    );
-
-    return false;
-  }
-
-  if (
-    !doc["wifi_ssid"].is<const char*>() ||
-    !doc["wifi_password"].is<const char*>() ||
-    !doc["server_url"].is<const char*>()
-  ) {
-
-    Serial.println(
-      "Required configuration fields missing."
-    );
-
-    return false;
-  }
-
-  String newSSID =
-    doc["wifi_ssid"].as<String>();
-
-  String newPassword =
-    doc["wifi_password"].as<String>();
-
-  String newServerURL =
-    doc["server_url"].as<String>();
-
-  if (
-    newSSID.length() == 0 ||
-    newPassword.length() == 0 ||
-    newServerURL.length() == 0
-  ) {
-
-    Serial.println(
-      "Received configuration is invalid."
-    );
-
-    return false;
-  }
-
-  // Remove trailing slash
-  if (
-    newServerURL.endsWith("/")
-  ) {
-
-    newServerURL.remove(
-      newServerURL.length() - 1
-    );
-  }
-
-  // ------------------------------------------------
-  // Check whether configuration changed
-  // ------------------------------------------------
-
-  bool changed =
-    newSSID != WIFI_SSID ||
-    newPassword != WIFI_PASSWORD ||
-    newServerURL != SERVER_URL;
-
-  if (!changed) {
-
-    Serial.println(
-      "Configuration is already up to date."
-    );
-
-    return false;
-  }
-
-  Serial.println();
-  Serial.println(
-    "NEW CONFIGURATION RECEIVED"
-  );
-
-  Serial.print(
-    "New SSID: "
-  );
-
-  Serial.println(
-    newSSID
-  );
-
-  Serial.print(
-    "New Server: "
-  );
-
-  Serial.println(
-    newServerURL
-  );
-
-  // ------------------------------------------------
-  // Save new configuration
-  // ------------------------------------------------
-
-  if (
-    !saveConfig(
-      newSSID,
-      newPassword,
-      newServerURL
-    )
-  ) {
-
-    Serial.println(
-      "Failed to save new configuration."
-    );
-
-    return false;
-  }
-
-  Serial.println();
-  Serial.println(
-    "Configuration updated successfully."
-  );
-
-  Serial.println(
-    "Restarting NodeMCU..."
-  );
-
-  delay(1500);
-
-  ESP.restart();
-
   return true;
 }
 
-
-// ==================================================
+// =====================================================
 // READ NDEF TEXT
-// ==================================================
+// =====================================================
 
 String readNDEFText() {
 
+  // Read Blocks 4, 5 and 6
+  // Total = 48 bytes
+  byte buffer[48];
+
+  String text = "";
+
   MFRC522::StatusCode status;
+
+  // ==========================================
+  // READ BLOCK 4
+  // ==========================================
 
   status = rfid.PCD_Authenticate(
     MFRC522::PICC_CMD_MF_AUTH_KEY_A,
@@ -648,529 +317,431 @@ String readNDEFText() {
     &(rfid.uid)
   );
 
-  if (
-    status != MFRC522::STATUS_OK
-  ) {
+  if (status != MFRC522::STATUS_OK) {
 
-    Serial.print(
-      "Authentication failed: "
-    );
-
-    Serial.println(
-      rfid.GetStatusCodeName(
-        status
-      )
-    );
+    Serial.print("Authentication failed: ");
+    Serial.println(rfid.GetStatusCodeName(status));
 
     return "";
   }
 
-  byte data[48];
+  byte blockData[18];
+  byte size = sizeof(blockData);
 
-  byte buffer[18];
+  status = rfid.MIFARE_Read(
+    4,
+    blockData,
+    &size
+  );
 
-  // Read blocks 4, 5, 6
-  for (
-    byte block = 4;
-    block <= 6;
-    block++
-  ) {
+  if (status != MFRC522::STATUS_OK) {
 
-    byte size =
-      sizeof(buffer);
+    Serial.print("Block 4 read failed: ");
+    Serial.println(rfid.GetStatusCodeName(status));
 
-    status = rfid.MIFARE_Read(
-      block,
-      buffer,
-      &size
-    );
+    return "";
+  }
 
-    if (
-      status != MFRC522::STATUS_OK
-    ) {
+  for (int i = 0; i < 16; i++) {
+    buffer[i] = blockData[i];
+  }
 
-      Serial.print(
-        "Block "
-      );
 
-      Serial.print(
-        block
-      );
+  // ==========================================
+  // READ BLOCK 5
+  // ==========================================
 
-      Serial.print(
-        " read failed: "
-      );
+  status = rfid.PCD_Authenticate(
+    MFRC522::PICC_CMD_MF_AUTH_KEY_A,
+    5,
+    &key,
+    &(rfid.uid)
+  );
+
+  if (status != MFRC522::STATUS_OK) {
+
+    Serial.print("Block 5 authentication failed: ");
+    Serial.println(rfid.GetStatusCodeName(status));
+
+    return "";
+  }
+
+  size = sizeof(blockData);
+
+  status = rfid.MIFARE_Read(
+    5,
+    blockData,
+    &size
+  );
+
+  if (status != MFRC522::STATUS_OK) {
+
+    Serial.print("Block 5 read failed: ");
+    Serial.println(rfid.GetStatusCodeName(status));
+
+    return "";
+  }
+
+  for (int i = 0; i < 16; i++) {
+    buffer[16 + i] = blockData[i];
+  }
+
+
+  // ==========================================
+  // READ BLOCK 6
+  // ==========================================
+
+  status = rfid.PCD_Authenticate(
+    MFRC522::PICC_CMD_MF_AUTH_KEY_A,
+    6,
+    &key,
+    &(rfid.uid)
+  );
+
+  if (status != MFRC522::STATUS_OK) {
+
+    Serial.print("Block 6 authentication failed: ");
+    Serial.println(rfid.GetStatusCodeName(status));
+
+    return "";
+  }
+
+  size = sizeof(blockData);
+
+  status = rfid.MIFARE_Read(
+    6,
+    blockData,
+    &size
+  );
+
+  if (status != MFRC522::STATUS_OK) {
+
+    Serial.print("Block 6 read failed: ");
+    Serial.println(rfid.GetStatusCodeName(status));
+
+    return "";
+  }
+
+  for (int i = 0; i < 16; i++) {
+    buffer[32 + i] = blockData[i];
+  }
+
+
+  // ==========================================
+  // FIND NDEF TLV
+  // ==========================================
+
+  int index = 0;
+
+  while (index < 48 && buffer[index] == 0x00) {
+    index++;
+  }
+
+  if (index >= 48 || buffer[index] != 0x03) {
+
+    Serial.println("NDEF TLV not found.");
+
+    return "";
+  }
+
+  index++;
+
+
+  // ==========================================
+  // NDEF LENGTH
+  // ==========================================
+
+  int ndefLength = buffer[index++];
+
+  if (ndefLength <= 0 ||
+      index + ndefLength > 48) {
+
+    Serial.println("Invalid NDEF length.");
+
+    return "";
+  }
+
+
+  // ==========================================
+  // NDEF RECORD HEADER
+  // ==========================================
+
+  if (buffer[index++] != 0xD1) {
+
+    Serial.println("Invalid NDEF record header.");
+
+    return "";
+  }
+
+
+  // Type length
+  byte typeLength = buffer[index++];
+
+  // Payload length
+  byte payloadLength = buffer[index++];
+
+
+  // ==========================================
+  // TEXT RECORD
+  // ==========================================
+
+  if (typeLength != 1 ||
+      buffer[index] != 0x54) {
+
+    Serial.println("NDEF is not a Text record.");
+
+    return "";
+  }
+
+  index += typeLength;
+
+
+  if (payloadLength < 3) {
+
+    Serial.println("NDEF payload too short.");
+
+    return "";
+  }
+
+
+  // ==========================================
+  // STATUS BYTE
+  // ==========================================
+
+  byte statusByte = buffer[index++];
+
+  byte languageLength = statusByte & 0x3F;
+
+  if (index + languageLength > 48) {
+
+    Serial.println("Invalid language length.");
+
+    return "";
+  }
+
+  index += languageLength;
+
+
+  // ==========================================
+  // TEXT
+  // ==========================================
+
+  int textLength =
+    payloadLength - 1 - languageLength;
+
+
+  if (textLength <= 0 ||
+      index + textLength > 48) {
+
+    Serial.println("Invalid NDEF text length.");
+
+    return "";
+  }
+
+
+  // ==========================================
+  // NUMERIC VALIDATION
+  // ==========================================
+
+  for (int i = 0; i < textLength; i++) {
+
+    char c = (char)buffer[index + i];
+
+    if (!isDigit(c)) {
 
       Serial.println(
-        rfid.GetStatusCodeName(
-          status
-        )
+        "Non-numeric character found in NDEF."
       );
 
       return "";
     }
 
-    for (
-      byte i = 0;
-      i < 16;
-      i++
-    ) {
-
-      data[
-        (block - 4) * 16 + i
-      ] = buffer[i];
-    }
+    text += c;
   }
 
-  // ------------------------------------------------
-  // Parse NDEF Text Record
-  // ------------------------------------------------
 
-  for (
-    byte i = 0;
-    i < 46;
-    i++
-  ) {
+  Serial.print("NDEF Number Read: ");
+  Serial.println(text);
 
-    if (
-      data[i] != 0x03
-    )
-      continue;
-
-    byte ndefLength =
-      data[i + 1];
-
-    if (
-      ndefLength == 0
-    )
-      continue;
-
-    if (
-      i + 2 + ndefLength > 48
-    )
-      continue;
-
-    byte start =
-      i + 2;
-
-    // NDEF Text record
-    if (
-      data[start] != 0xD1
-    )
-      continue;
-
-    byte typeLength =
-      data[start + 1];
-
-    byte payloadLength =
-      data[start + 2];
-
-    if (
-      typeLength != 1
-    )
-      continue;
-
-    // "T"
-    if (
-      data[start + 3] != 0x54
-    )
-      continue;
-
-    byte payloadStart =
-      start + 4;
-
-    if (
-      payloadLength < 1
-    )
-      continue;
-
-    byte statusByte =
-      data[payloadStart];
-
-    byte languageLength =
-      statusByte & 0x3F;
-
-    if (
-      languageLength + 1 >
-      payloadLength
-    )
-      continue;
-
-    byte textStart =
-      payloadStart +
-      1 +
-      languageLength;
-
-    byte textLength =
-      payloadLength -
-      1 -
-      languageLength;
-
-    String text = "";
-
-    for (
-      byte j = 0;
-      j < textLength;
-      j++
-    ) {
-
-      text += (char)data[
-        textStart + j
-      ];
-    }
-
-    return text;
-  }
-
-  return "";
+  return text;
 }
+// =====================================================
+// VERIFY CARD WITH SERVER
+// =====================================================
 
-
-// ==================================================
-// VERIFY CARD
-// ==================================================
-
-void verifyCard(
-  String number
-) {
-
-  if (
-    WiFi.status() != WL_CONNECTED
-  ) {
-
-    Serial.println(
-      "WiFi is not connected."
-    );
-
-    return;
+bool verifyCard(String number) {
+  if (WiFi.status() != WL_CONNECTED) {
+    Serial.println("Wi-Fi is not connected. Verification skipped.");
+    return false;
   }
-
-  WiFiClient client;
 
   HTTPClient http;
+  WiFiClient client;
+  String endpoint = SERVER_URL + "/verify";
 
-  String verifyURL =
-    SERVER_URL + "/verify";
+  Serial.println("\nSending verification request...");
+  Serial.print("URL: ");
+  Serial.println(endpoint);
+  Serial.print("Number: ");
+  Serial.println(number);
 
-  Serial.println();
-  Serial.println("==============================");
-  Serial.println("       VERIFYING CARD");
-  Serial.println("==============================");
-
-  Serial.print(
-    "Card Number: "
-  );
-
-  Serial.println(
-    number
-  );
-
-  if (
-    !http.begin(
-      client,
-      verifyURL
-    )
-  ) {
-
-    Serial.println(
-      "HTTP connection failed."
-    );
-
-    return;
+  if (!http.begin(client, endpoint)) {
+    Serial.println("HTTP connection failed.");
+    return false;
   }
 
-  http.addHeader(
-    "Content-Type",
-    "application/json"
-  );
+  http.addHeader("Content-Type", "application/json");
 
-  String json =
-    "{\"number\":\"" +
-    number +
-    "\"}";
+  JsonDocument doc;
+  doc["number"] = number;
+  String requestBody;
+  serializeJson(doc, requestBody);
 
-  Serial.print(
-    "Sending: "
-  );
+  int httpCode = http.POST(requestBody);
 
-  Serial.println(
-    json
-  );
-
-  int httpCode =
-    http.POST(
-      json
-    );
-
-  if (
-    httpCode > 0
-  ) {
-
-    Serial.print(
-      "HTTP Status: "
-    );
-
-    Serial.println(
-      httpCode
-    );
-
-    String response =
-      http.getString();
-
-    Serial.print(
-      "Server Response: "
-    );
-
-    Serial.println(
-      response
-    );
-
-    if (
-      response.indexOf(
-        "\"access\":\"granted\""
-      ) >= 0
-    ) {
-
-      Serial.println();
-      Serial.println(
-        "=============================="
-      );
-
-      Serial.println(
-        "       ACCESS: GRANTED"
-      );
-
-      Serial.println(
-        "=============================="
-      );
-
-    }
-    else if (
-      response.indexOf(
-        "\"access\":\"denied\""
-      ) >= 0
-    ) {
-
-      Serial.println();
-      Serial.println(
-        "=============================="
-      );
-
-      Serial.println(
-        "       ACCESS: DENIED"
-      );
-
-      Serial.println(
-        "=============================="
-      );
-
-    }
-    else {
-
-      Serial.println(
-        "UNKNOWN SERVER RESPONSE"
-      );
-    }
-
+  if (httpCode <= 0) {
+    Serial.print("HTTP request failed: ");
+    Serial.println(http.errorToString(httpCode));
+    http.end();
+    return false;
   }
-  else {
 
-    Serial.print(
-      "HTTP POST failed: "
-    );
+  Serial.print("HTTP Status: ");
+  Serial.println(httpCode);
 
-    Serial.println(
-      http.errorToString(
-        httpCode
-      )
-    );
-  }
+  String response = http.getString();
+  Serial.print("Server Response: ");
+  Serial.println(response);
 
   http.end();
+
+  JsonDocument responseDoc;
+  DeserializationError error = deserializeJson(responseDoc, response);
+
+  if (error) {
+    Serial.println("Invalid server JSON.");
+    return false;
+  }
+
+  bool success = responseDoc["success"] | false;
+  String access = responseDoc["access"] | "";
+
+  if (success && access == "granted") {
+    Serial.println("\n********************************");
+    Serial.println("         ACCESS GRANTED");
+    Serial.println("********************************\n");
+    return true;
+  }
+
+  if (success && access == "denied") {
+    Serial.println("\n********************************");
+    Serial.println("         ACCESS DENIED");
+    Serial.println("********************************\n");
+    return false;
+  }
+
+  Serial.println("Unknown server response.");
+  return false;
 }
 
-
-// ==================================================
+// =====================================================
 // SETUP
-// ==================================================
+// =====================================================
 
 void setup() {
-
-  Serial.begin(
-    115200
-  );
-
+  Serial.begin(115200);
   delay(1000);
 
-  Serial.println();
-  Serial.println("==============================");
-  Serial.println("       NFC ACCESS SYSTEM");
-  Serial.println("==============================");
+  Serial.println("\n\n====================================");
+  Serial.println("      RFID ACCESS CONTROLLER");
+  Serial.println("====================================\n");
 
-
-  // ==================================================
-  // LITTLEFS
-  // ==================================================
-
-  bool filesystemReady =
-    LittleFS.begin();
-
-  if (
-    filesystemReady
-  ) {
-
-    Serial.println(
-      "LittleFS initialized."
-    );
-
-    // Try saved configuration first.
-    // If unavailable, use defaults.
-
-    if (
-      !loadSavedConfig()
-    ) {
-
-      setDefaultConfig();
-    }
-
+  if (!LittleFS.begin()) {
+    Serial.println("LittleFS mount failed.");
+    return;
   }
-  else {
+  Serial.println("LittleFS mounted.");
 
-    Serial.println(
-      "LittleFS initialization failed."
-    );
-
-    // Continue using firmware defaults.
-    setDefaultConfig();
+  setDefaultConfig();
+  if (loadSavedConfig()) {
+    Serial.println("Using saved configuration.");
+  } else {
+    Serial.println("Using default configuration.");
+    saveConfig();
   }
-
-
-  // ==================================================
-  // RFID
-  // ==================================================
+  printCurrentConfig();
 
   SPI.begin();
-
   rfid.PCD_Init();
+  delay(100);
 
-  for (
-    byte i = 0;
-    i < 6;
-    i++
-  ) {
+  for (byte i = 0; i < 6; i++) {
+    key.keyByte[i] = ndefKey[i];
+  }
+  Serial.println("RC522 initialized.");
 
-    key.keyByte[i] =
-      ndefKey[i];
+  bool wifiConnected = connectWiFi();
+  if (!wifiConnected) {
+    Serial.println("\nWi-Fi not connected.");
+    Serial.println("You can type CONFIG anytime through USB.\n");
   }
 
-  Serial.println(
-    "RFID reader initialized."
-  );
-
-
-  // ==================================================
-  // WIFI
-  // ==================================================
-
-  bool connected =
-    connectWiFi();
-
-
-  // ==================================================
-  // FETCH LATEST CONFIG
-  // ==================================================
-
-  if (
-    connected
-  ) {
-
-    // If this fails:
-    // keep current configuration
-    // and continue RFID operation.
-
-    fetchRemoteConfig();
-  }
-
-
-  // ==================================================
-  // READY
-  // ==================================================
-
-  Serial.println();
-  Serial.println("==============================");
-  Serial.println("         SYSTEM READY");
-  Serial.println("==============================");
-
-  Serial.println(
-    "Waiting for card..."
-  );
+  Serial.println("\n====================================");
+  Serial.println("SYSTEM READY");
+  Serial.println("====================================\n");
+  Serial.println("USB command available anytime: CONFIG\n");
 }
 
-
-// ==================================================
+// =====================================================
 // LOOP
-// ==================================================
+// =====================================================
 
 void loop() {
-
-  if (
-    !rfid.PICC_IsNewCardPresent()
-  )
+  if (checkForConfigCommand()) {
     return;
-
-  if (
-    !rfid.PICC_ReadCardSerial()
-  )
-    return;
-
-
-  Serial.println();
-  Serial.println("==============================");
-  Serial.println("       CARD DETECTED");
-  Serial.println("==============================");
-
-
-  String number =
-    readNDEFText();
-
-
-  if (
-    number.length() > 0
-  ) {
-
-    Serial.println(
-      "CARD NUMBER:"
-    );
-
-    Serial.println(
-      number
-    );
-
-    verifyCard(
-      number
-    );
-
-  }
-  else {
-
-    Serial.println(
-      "No NDEF text found."
-    );
   }
 
+  if (WiFi.status() != WL_CONNECTED) {
+    Serial.println("\nWi-Fi disconnected.");
+    if (!connectWiFi()) {
+      delay(1000);
+      return;
+    }
+  }
+
+  if (!rfid.PICC_IsNewCardPresent()) {
+    delay(50);
+    return;
+  }
+  if (!rfid.PICC_ReadCardSerial()) {
+    delay(50);
+    return;
+  }
+
+  Serial.println("\n------------------------------------");
+  Serial.println("RFID CARD DETECTED");
+  Serial.println("------------------------------------");
+
+  String number = readNDEFText();
+
+  if (number.length() == 0) {
+    Serial.println("Verification skipped: No valid numeric NDEF found.");
+    rfid.PICC_HaltA();
+    rfid.PCD_StopCrypto1();
+    delay(1000);
+    return;
+  }
+  
+  Serial.print("Parsed NDEF Number: ");
+  Serial.println(number);
+
+  verifyCard(number);
 
   rfid.PICC_HaltA();
-
   rfid.PCD_StopCrypto1();
 
+  Serial.println("\nCard processing completed.");
+  Serial.println("USB CONFIG remains available anytime.\n");
 
-  // Prevent duplicate scans
-  delay(1000);
-
-
-  Serial.println();
-
-  Serial.println(
-    "Waiting for card..."
-  );
+  delay(1500);
 }

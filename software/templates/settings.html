@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RFID ACCESS - Settings</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <script src="https://unpkg.com/lucide@latest"></script>
+</head>
+<body>
+    <nav class="navbar glass-panel">
+        <div class="nav-left">
+            <i data-lucide="shield-check" class="text-cyan"></i>
+            <span class="nav-brand font-space">RFID ACCESS</span>
+            <a href="{{ url_for('dashboard') }}" class="nav-link">Dashboard</a>
+            <a href="#" class="nav-link">Access Logs</a>
+            {% if current_user.role.name in ['superadmin', 'admin'] %}
+            <a href="{{ url_for('settings') }}" class="nav-link active">Settings</a>
+            {% endif %}
+        </div>
+        <div class="nav-right">
+            <div class="status-indicator">
+                <span class="pulse-dot"></span> System Online
+            </div>
+            <div class="user-profile">
+                <i data-lucide="user-circle"></i> {{ current_user.username }}
+            </div>
+            <a href="{{ url_for('logout') }}" class="btn-logout"><i data-lucide="log-out"></i> Logout</a>
+        </div>
+    </nav>
+
+    <main class="dashboard-container">
+        <h2 class="font-space section-title">SYSTEM SETTINGS</h2>
+        
+        <div class="bottom-grid" style="grid-template-columns: 1fr;">
+            <!-- Device Configuration -->
+            <section class="config-panel glass-panel">
+                <div class="card-header border-bottom pb-3">
+                    <h3 class="font-space m-0 text-gray">NODEMCU USB CONFIGURATION</h3>
+                    <i data-lucide="usb" class="text-gray"></i>
+                </div>
+                <div class="mt-4">
+                    <form id="config-form">
+                        <div style="margin-bottom: 15px;">
+                            <label class="text-gray text-sm" style="display: block; margin-bottom: 5px;">COM Port</label>
+                            <div style="display: flex; gap: 10px;">
+                                <select id="serial_port" required style="width: 100%; padding: 10px; background: rgba(0,0,0,0.2); border: 1px solid rgba(255,255,255,0.1); color: white; border-radius: 4px; box-sizing: border-box; appearance: auto;">
+                                    <option value="" disabled selected>Select COM Port</option>
+                                </select>
+                                <button type="button" id="refresh-ports" style="padding: 10px 15px; background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2); color: white; border-radius: 4px; cursor: pointer; white-space: nowrap; display: flex; align-items: center; gap: 5px;"><i data-lucide="refresh-cw" style="width:16px;height:16px;"></i> Refresh</button>
+                            </div>
+                        </div>
+                        <div style="margin-bottom: 15px;">
+                            <label class="text-gray text-sm" style="display: block; margin-bottom: 5px;">Wi-Fi SSID</label>
+                            <input type="text" id="wifi_ssid" required style="width: 100%; padding: 10px; background: rgba(0,0,0,0.2); border: 1px solid rgba(255,255,255,0.1); color: white; border-radius: 4px; box-sizing: border-box;">
+                        </div>
+                        <div style="margin-bottom: 15px;">
+                            <label class="text-gray text-sm" style="display: block; margin-bottom: 5px;">Wi-Fi Password</label>
+                            <div style="display: flex; gap: 10px;">
+                                <input type="password" id="wifi_password" required style="width: 100%; padding: 10px; background: rgba(0,0,0,0.2); border: 1px solid rgba(255,255,255,0.1); color: white; border-radius: 4px; box-sizing: border-box;">
+                                <button type="button" id="toggle-password" style="padding: 10px; background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2); color: white; border-radius: 4px; cursor: pointer;"><i data-lucide="eye" style="width:16px;height:16px;"></i></button>
+                            </div>
+                        </div>
+                        <div style="margin-bottom: 15px;">
+                            <label class="text-gray text-sm" style="display: block; margin-bottom: 5px;">Server URL</label>
+                            <input type="url" id="server_url" required style="width: 100%; padding: 10px; background: rgba(0,0,0,0.2); border: 1px solid rgba(255,255,255,0.1); color: white; border-radius: 4px; box-sizing: border-box;">
+                        </div>
+                        
+                        <div style="display: flex; justify-content: flex-end; align-items: center; margin-top: 20px;">
+                            <button id="save-btn" type="submit" style="padding: 10px 20px; background: var(--accent-cyan); color: #000; border: none; border-radius: 4px; font-weight: bold; cursor: pointer; font-family: 'Space Grotesk', sans-serif;">Save to Device via USB</button>
+                        </div>
+                        <div id="config-message" style="margin-top: 10px; font-size: 14px; min-height: 20px;"></div>
+                    </form>
+                </div>
+            </section>
+        </div>
+    </main>
+
+    <script>
+        lucide.createIcons();
+
+        document.addEventListener('DOMContentLoaded', () => {
+            initDeviceConfig();
+        });
+
+        async function fetchSerialPorts() {
+            try {
+                const response = await fetch('/api/device/serial-ports');
+                if (response.ok) {
+                    const data = await response.json();
+                    const select = document.getElementById('serial_port');
+                    
+                    // Keep the default option
+                    select.innerHTML = '<option value="" disabled selected>Select COM Port</option>';
+                    
+                    if (data.success && data.ports && data.ports.length > 0) {
+                        data.ports.forEach(port => {
+                            const option = document.createElement('option');
+                            option.value = port.device;
+                            option.textContent = `${port.device} - ${port.description}`;
+                            option.style.color = 'black'; // for dropdown visibility on some browsers
+                            select.appendChild(option);
+                        });
+                    } else {
+                        const option = document.createElement('option');
+                        option.value = "";
+                        option.disabled = true;
+                        option.textContent = "No COM ports found";
+                        select.appendChild(option);
+                    }
+                }
+            } catch (e) {
+                console.error("Error fetching serial ports", e);
+            }
+        }
+
+        async function initDeviceConfig() {
+            await fetchSerialPorts();
+            
+            const refreshBtn = document.getElementById('refresh-ports');
+            if (refreshBtn) {
+                refreshBtn.addEventListener('click', async () => {
+                    refreshBtn.disabled = true;
+                    refreshBtn.innerHTML = 'Refreshing...';
+                    await fetchSerialPorts();
+                    refreshBtn.disabled = false;
+                    refreshBtn.innerHTML = '<i data-lucide="refresh-cw" style="width:16px;height:16px;"></i> Refresh';
+                    lucide.createIcons();
+                });
+            }
+            
+            const toggleBtn = document.getElementById('toggle-password');
+            if (toggleBtn) {
+                toggleBtn.addEventListener('click', () => {
+                    const pwInput = document.getElementById('wifi_password');
+                    if (pwInput.type === 'password') {
+                        pwInput.type = 'text';
+                        toggleBtn.innerHTML = '<i data-lucide="eye-off" style="width:16px;height:16px;"></i>';
+                    } else {
+                        pwInput.type = 'password';
+                        toggleBtn.innerHTML = '<i data-lucide="eye" style="width:16px;height:16px;"></i>';
+                    }
+                    lucide.createIcons();
+                });
+            }
+
+            const configForm = document.getElementById('config-form');
+            if (configForm) {
+                configForm.addEventListener('submit', async (e) => {
+                    e.preventDefault();
+                    const msgEl = document.getElementById('config-message');
+                    const btn = document.getElementById('save-btn');
+                    
+                    btn.disabled = true;
+                    btn.textContent = 'Configuring device...';
+                    msgEl.textContent = '';
+                    msgEl.style.color = 'var(--text-muted)';
+                    
+                    try {
+                        const response = await fetch('/api/device/configure-usb', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                                port: document.getElementById('serial_port').value,
+                                wifi_ssid: document.getElementById('wifi_ssid').value,
+                                wifi_password: document.getElementById('wifi_password').value,
+                                server_url: document.getElementById('server_url').value
+                            })
+                        });
+                        
+                        const data = await response.json();
+                        btn.disabled = false;
+                        btn.textContent = 'Save to Device via USB';
+                        
+                        if (response.status === 403) {
+                            msgEl.textContent = data.message || 'Permission denied. You do not have access to configure via USB.';
+                            msgEl.style.color = 'var(--status-red)';
+                            return;
+                        }
+                        
+                        if (data.success) {
+                            msgEl.textContent = 'Device configuration saved successfully.';
+                            msgEl.style.color = 'var(--status-green)';
+                            // Clear password field for safety
+                            document.getElementById('wifi_password').value = '';
+                        } else {
+                            msgEl.textContent = data.error || data.message || 'Failed to save configuration';
+                            msgEl.style.color = 'var(--status-red)';
+                        }
+                    } catch (err) {
+                        btn.disabled = false;
+                        btn.textContent = 'Save to Device via USB';
+                        msgEl.textContent = 'Network error communicating with Flask backend.';
+                        msgEl.style.color = 'var(--status-red)';
+                    }
+                });
+            }
+        }
+    </script>
+</body>
+</html>
