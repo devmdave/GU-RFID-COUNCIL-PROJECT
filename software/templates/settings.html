@@ -33,7 +33,7 @@
     <main class="dashboard-container">
         <h2 class="font-space section-title">SYSTEM SETTINGS</h2>
         
-        <div class="bottom-grid" style="grid-template-columns: 1fr;">
+        <div class="bottom-grid" style="grid-template-columns: 1fr 1fr; gap: 20px; align-items: start;">
             <!-- Device Configuration -->
             <section class="config-panel glass-panel">
                 <div class="card-header border-bottom pb-3">
@@ -72,6 +72,27 @@
                         </div>
                         <div id="config-message" style="margin-top: 10px; font-size: 14px; min-height: 20px;"></div>
                     </form>
+                </div>
+            </section>
+
+            <!-- Serial Monitor -->
+            <section class="config-panel glass-panel" style="display: flex; flex-direction: column; height: 100%;">
+                <div class="card-header border-bottom pb-3" style="display: flex; justify-content: space-between; align-items: center;">
+                    <div style="display: flex; align-items: center; gap: 10px;">
+                        <h3 class="font-space m-0 text-gray">SERIAL MONITOR</h3>
+                        <i data-lucide="terminal" class="text-gray"></i>
+                    </div>
+                    <div style="display: flex; align-items: center; gap: 5px; font-size: 12px; font-weight: bold;">
+                        <span id="serial-status-dot" class="pulse-dot" style="background-color: var(--status-red);"></span>
+                        <span id="serial-status-text" class="text-gray">DISCONNECTED</span>
+                    </div>
+                </div>
+                <div class="mt-2 text-sm text-gray" id="serial-port-info" style="margin-bottom: 10px;">
+                    No port selected • 115200 baud
+                </div>
+                <div id="serial-output" style="flex-grow: 1; background: rgba(0,0,0,0.5); border: 1px solid rgba(255,255,255,0.1); border-radius: 4px; padding: 10px; font-family: monospace; color: #0f0; font-size: 13px; overflow-y: auto; height: 400px; white-space: pre-wrap; word-wrap: break-word;"></div>
+                <div style="display: flex; justify-content: flex-end; margin-top: 15px;">
+                    <button type="button" id="clear-serial-btn" style="padding: 8px 15px; background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2); color: white; border-radius: 4px; cursor: pointer;">Clear Output</button>
                 </div>
             </section>
         </div>
@@ -115,8 +136,81 @@
             }
         }
 
+        let serialEventSource = null;
+
+        function startSerialMonitor(port) {
+            if (serialEventSource) {
+                serialEventSource.close();
+            }
+            
+            const output = document.getElementById('serial-output');
+            const statusText = document.getElementById('serial-status-text');
+            const statusDot = document.getElementById('serial-status-dot');
+            const portInfo = document.getElementById('serial-port-info');
+            
+            if (!port) {
+                statusText.textContent = 'WAITING';
+                statusDot.style.backgroundColor = 'var(--text-muted)';
+                portInfo.textContent = 'No port selected • 115200 baud';
+                return;
+            }
+
+            statusText.textContent = 'CONNECTING...';
+            statusDot.style.backgroundColor = 'var(--accent-cyan)';
+            portInfo.textContent = `${port} • 115200 baud`;
+            
+            serialEventSource = new EventSource(`/api/device/serial-stream?port=${port}`);
+            
+            serialEventSource.onopen = () => {
+                statusText.textContent = 'CONNECTED';
+                statusDot.style.backgroundColor = 'var(--status-green)';
+            };
+            
+            serialEventSource.onmessage = (event) => {
+                try {
+                    const data = JSON.parse(event.data);
+                    if (data.line) {
+                        const lineDiv = document.createElement('div');
+                        const now = new Date();
+                        const timeStr = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}:${now.getSeconds().toString().padStart(2, '0')}`;
+                        lineDiv.textContent = `${timeStr}  ${data.line}`;
+                        output.appendChild(lineDiv);
+                        
+                        // Keep max 500 lines
+                        while (output.childNodes.length > 500) {
+                            output.removeChild(output.firstChild);
+                        }
+                        
+                        // Auto-scroll
+                        output.scrollTop = output.scrollHeight;
+                    }
+                } catch (err) {
+                    console.error("Error parsing serial line", err);
+                }
+            };
+            
+            serialEventSource.onerror = (err) => {
+                statusText.textContent = 'DISCONNECTED';
+                statusDot.style.backgroundColor = 'var(--status-red)';
+            };
+        }
+
         async function initDeviceConfig() {
             await fetchSerialPorts();
+            
+            const selectPort = document.getElementById('serial_port');
+            if (selectPort) {
+                selectPort.addEventListener('change', (e) => {
+                    startSerialMonitor(e.target.value);
+                });
+            }
+            
+            const clearBtn = document.getElementById('clear-serial-btn');
+            if (clearBtn) {
+                clearBtn.addEventListener('click', () => {
+                    document.getElementById('serial-output').innerHTML = '';
+                });
+            }
             
             const refreshBtn = document.getElementById('refresh-ports');
             if (refreshBtn) {

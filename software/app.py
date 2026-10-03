@@ -275,5 +275,32 @@ def configure_usb():
     except requests.RequestException:
         return jsonify({"success": False, "error": "Serial Bridge is not running on host or timed out."}), 502
 
+@app.route('/api/device/serial-stream', methods=['GET'])
+@login_required
+@role_required('superadmin', 'admin')
+def serial_stream():
+    port = request.args.get('port')
+    if not port:
+        return jsonify({"error": "Missing port"}), 400
+        
+    def generate():
+        try:
+            r = requests.get(f'http://host.docker.internal:8765/stream?port={port}', stream=True, timeout=60)
+            if r.status_code != 200:
+                try:
+                    err = r.json().get("error", "Connection failed")
+                except:
+                    err = "Connection failed"
+                yield f"data: {json.dumps({'line': f'ERROR: {err}'})}\n\n"
+                return
+                
+            for line in r.iter_lines(decode_unicode=True):
+                if line:
+                    yield f"{line}\n\n"
+        except requests.RequestException:
+            yield "data: {\"line\": \"ERROR: Serial Bridge disconnected.\"}\n\n"
+            
+    return Response(generate(), mimetype='text/event-stream')
+
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000)
