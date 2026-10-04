@@ -3,9 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>RFID ACCESS - Superadmin Login</title>
+    <title>TAPSYNC - Superadmin Login</title>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}?v=3.0">
     <script src="https://unpkg.com/lucide@latest"></script>
     <style>
         .login-container {
@@ -48,8 +48,8 @@
         <div class="login-card glass-panel">
             <div class="login-header">
                 <i data-lucide="shield-alert"></i>
-                <h2 class="font-space m-0 text-white">SUPERADMIN ACCESS</h2>
-                <p class="text-gray text-sm mt-2">Restricted Area</p>
+                <h2 class="font-space m-0 text-white" style="font-size: 20px; letter-spacing: 2px;">TAPSYNC SUPERADMIN</h2>
+                <p class="text-gray text-sm mt-2" style="letter-spacing: 1px; text-transform: uppercase; color: var(--status-red);">Restricted Area</p>
             </div>
 
             {% if error %}

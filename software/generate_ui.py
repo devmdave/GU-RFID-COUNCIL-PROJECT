@@ -1,0 +1,103 @@
+import os
+import re
+
+base_html = """<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TAPSYNC - {% block title %}Dashboard{% endblock %}</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <script src="https://unpkg.com/lucide@latest"></script>
+    {% block head %}{% endblock %}
+</head>
+<body class="tapsync-theme">
+    <div class="layout-wrapper">
+        <!-- Sidebar -->
+        <aside class="sidebar" id="sidebar">
+            <div class="sidebar-header">
+                <div class="brand">
+                    <i data-lucide="radio" class="brand-icon"></i>
+                    <div class="brand-text">
+                        <h1>TAPSYNC</h1>
+                        <p>RFID Access System</p>
+                    </div>
+                </div>
+            </div>
+            
+            <nav class="sidebar-nav">
+                <div class="nav-section">MAIN</div>
+                <a href="{{ url_for('dashboard') }}" class="nav-item {% if request.endpoint == 'dashboard' %}active{% endif %}">
+                    <i data-lucide="layout-dashboard"></i> Dashboard
+                </a>
+                <a href="{{ url_for('access_logs_page') }}" class="nav-item {% if request.endpoint == 'access_logs_page' %}active{% endif %}">
+                    <i data-lucide="list"></i> Access Logs
+                </a>
+
+                {% if current_user.role.name in ['superadmin', 'admin'] %}
+                <div class="nav-section">MANAGEMENT</div>
+                <a href="{{ url_for('users_page') }}" class="nav-item {% if request.endpoint == 'users_page' %}active{% endif %}">
+                    <i data-lucide="users"></i> Users & Roles
+                </a>
+                
+                <div class="nav-section">SYSTEM</div>
+                <a href="{{ url_for('settings') }}" class="nav-item {% if request.endpoint == 'settings' %}active{% endif %}">
+                    <i data-lucide="settings"></i> Settings
+                </a>
+                {% endif %}
+                
+                {% if current_user.role.name == 'superadmin' %}
+                <div class="nav-section">SUPERADMIN</div>
+                <a href="{{ url_for('superadmin_logs') }}" class="nav-item {% if request.endpoint == 'superadmin_logs' %}active{% endif %}">
+                    <i data-lucide="shield-alert"></i> Audit Logs
+                </a>
+                {% endif %}
+            </nav>
+            
+            <div class="sidebar-footer">
+                <p>Made by Tech Community</p>
+            </div>
+        </aside>
+
+        <!-- Main Content -->
+        <div class="main-content">
+            <header class="topbar">
+                <div class="topbar-left">
+                    <button id="mobile-menu-btn" class="mobile-only"><i data-lucide="menu"></i></button>
+                    <h2 class="page-title">{% block page_title %}Dashboard{% endblock %}</h2>
+                </div>
+                <div class="topbar-right">
+                    <div class="user-profile">
+                        <div class="user-info">
+                            <span class="user-name">{{ current_user.username }}</span>
+                            <span class="user-role">{{ current_user.role.name | upper }}</span>
+                        </div>
+                    </div>
+                    <form action="{{ url_for('logout') }}" method="GET" class="m-0">
+                        <button type="submit" class="btn-logout"><i data-lucide="log-out"></i></button>
+                    </form>
+                </div>
+            </header>
+
+            <main class="page-container">
+                {% block content %}{% endblock %}
+            </main>
+        </div>
+    </div>
+
+    <script>
+        lucide.createIcons();
+        document.getElementById('mobile-menu-btn')?.addEventListener('click', () => {
+            document.getElementById('sidebar').classList.toggle('open');
+        });
+    </script>
+    {% block scripts %}{% endblock %}
+</body>
+</html>
+"""
+
+with open('templates/base.html', 'w') as f:
+    f.write(base_html)
+
+print("Base template created.")

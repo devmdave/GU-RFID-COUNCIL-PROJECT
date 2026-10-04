@@ -1,52 +1,10 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>RFID ACCESS - Superadmin Logs</title>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
-    <script src="https://unpkg.com/lucide@latest"></script>
-    <style>
-        .btn-delete {
-            background: rgba(239, 68, 68, 0.1);
-            color: var(--status-red);
-            border: 1px solid rgba(239, 68, 68, 0.3);
-            padding: 6px 10px;
-            border-radius: 4px;
-            cursor: pointer;
-            transition: all 0.2s;
-            display: flex;
-            align-items: center;
-            gap: 5px;
-            font-size: 12px;
-        }
-        .btn-delete:hover {
-            background: rgba(239, 68, 68, 0.2);
-        }
-        .navbar-superadmin {
-            border-bottom: 1px solid var(--status-red);
-        }
-    </style>
-</head>
-<body>
-    <nav class="navbar glass-panel navbar-superadmin">
-        <div class="nav-left">
-            <i data-lucide="shield-alert" style="color: var(--status-red);"></i>
-            <span class="nav-brand font-space" style="color: var(--status-red);">SUPERADMIN</span>
-            <span class="nav-link active">Access Logs Management</span>
-        </div>
-        <div class="nav-right">
-            <div class="user-profile">
-                <i data-lucide="user-check"></i> {{ current_user.username }}
-            </div>
-            <form action="{{ url_for('superadmin_logout') }}" method="POST" style="margin: 0;">
-                <button type="submit" class="btn-logout" style="background: none; border: none; cursor: pointer; color: var(--text-gray); display: flex; align-items: center; gap: 8px;"><i data-lucide="log-out"></i> Logout</button>
-            </form>
-        </div>
-    </nav>
+{% extends "base.html" %}
 
-    <main class="dashboard-container">
+{% block title %}Audit Logs{% endblock %}
+{% block page_title %}AUDIT LOGS{% endblock %}
+
+{% block content %}
+<main class="dashboard-container">
         <section class="activity-panel glass-panel">
             <div class="card-header border-bottom pb-3">
                 <h3 class="font-space m-0 text-white">ACCESS LOGS MANAGEMENT</h3>
@@ -111,53 +69,8 @@
             </div>
         </section>
     </main>
+{% endblock %}
 
-    <script>
-        lucide.createIcons();
-
-        function showMessage(msg, isError) {
-            const el = document.getElementById('status-message');
-            el.style.display = 'block';
-            el.textContent = msg;
-            if (isError) {
-                el.style.background = 'rgba(239, 68, 68, 0.1)';
-                el.style.color = 'var(--status-red)';
-                el.style.border = '1px solid rgba(239, 68, 68, 0.2)';
-            } else {
-                el.style.background = 'rgba(16, 185, 129, 0.1)';
-                el.style.color = 'var(--status-green)';
-                el.style.border = '1px solid rgba(16, 185, 129, 0.2)';
-            }
-            setTimeout(() => {
-                el.style.display = 'none';
-            }, 5000);
-        }
-
-        async function deleteLog(logId) {
-            if (!confirm(`Are you sure you want to delete access log #${logId}?`)) {
-                return;
-            }
-            
-            try {
-                const response = await fetch(`/superadmin/logs/${logId}`, {
-                    method: 'DELETE',
-                    headers: { 'Content-Type': 'application/json' }
-                });
-                
-                const data = await response.json();
-                
-                if (response.ok && data.success) {
-                    const row = document.getElementById(`log-row-${logId}`);
-                    if (row) row.remove();
-                    showMessage(`Log #${logId} deleted successfully.`, false);
-                } else {
-                    showMessage(`Failed to delete log: ${data.error || 'Unknown error'}`, true);
-                }
-            } catch (err) {
-                console.error(err);
-                showMessage('An error occurred while deleting the log.', true);
-            }
-        }
-    </script>
-</body>
-</html>
+{% block scripts %}
+<!-- Scripts here if needed -->
+{% endblock %}

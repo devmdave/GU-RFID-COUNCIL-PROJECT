@@ -3,9 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>RFID ACCESS - Login</title>
+    <title>TAPSYNC - Login</title>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}?v=3.0">
     <!-- Lucide Icons -->
     <script src="https://unpkg.com/lucide@latest"></script>
 </head>
@@ -13,9 +13,9 @@
     <div class="login-container">
         <div class="login-card glass-panel">
             <div class="login-header">
-                <i data-lucide="shield-check" class="login-icon"></i>
-                <h1 class="font-space">RFID ACCESS</h1>
-                <p class="subtitle">SECURE ACCESS CONTROL SYSTEM</p>
+                <i data-lucide="radio" class="login-icon" style="width: 48px; height: 48px; color: var(--accent-cyan); margin-bottom: 12px;"></i>
+                <h1 class="font-space" style="margin: 0; font-size: 24px; letter-spacing: 2px;">TAPSYNC</h1>
+                <p class="subtitle" style="color: var(--accent-cyan); font-size: 11px; margin-top: 8px; letter-spacing: 2px; text-transform: uppercase;">RFID Access & Attendance System</p>
             </div>
             
             {% if error %}
