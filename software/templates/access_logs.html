@@ -5,28 +5,40 @@
 
 {% block content %}
 <main class="dashboard-container">
-        <section class="activity-panel glass-panel">
-            <div class="card-header border-bottom pb-3">
-                <h3 class="font-space m-0 text-gray">ACCESS LOGS</h3>
-                <i data-lucide="database" class="text-gray"></i>
+    <div class="bottom-grid" style="grid-template-columns: 1fr; width: 100%; margin: 0;">
+        <section class="config-panel glass-panel" style="display: flex; flex-direction: column; padding: 0; min-height: calc(100vh - 120px);">
+            
+            <div class="card-header border-bottom pb-3" style="padding: 24px 24px 16px 24px; display: flex; justify-content: space-between; align-items: center;">
+                <div style="display: flex; align-items: center; gap: 10px;">
+                    <h3 class="font-space m-0 text-gray">ACCESS LOGS</h3>
+                    <i data-lucide="database" class="text-gray"></i>
+                </div>
             </div>
             
-            <div class="filter-controls mt-4">
-                <input type="date" id="date-filter" aria-label="Filter by Date">
-                <button class="btn-clear" id="btn-clear-filter">
-                    <i data-lucide="x"></i> Clear Filter
+            <div class="filter-controls" style="padding: 24px 24px 0 24px; display: flex; flex-wrap: wrap; gap: 16px; align-items: center;">
+                <div class="form-group" style="margin-bottom: 0;">
+                    <div class="input-wrapper" style="width: auto;">
+                        <i data-lucide="calendar" class="text-gray" style="width: 18px; height: 18px;"></i>
+                        <input type="date" id="date-filter" aria-label="Filter by Date" style="color: white; color-scheme: dark; font-family: 'Inter', sans-serif;">
+                    </div>
+                </div>
+                
+                <button class="btn-secondary" id="btn-clear-filter">
+                    <i data-lucide="x" style="width: 16px; height: 16px;"></i> Clear Filter
                 </button>
+                
                 <div style="flex-grow: 1;"></div>
-                <button class="btn-export" id="btn-export">
-                    <i data-lucide="download"></i> Export Excel
+                
+                <button class="btn-primary" id="btn-export">
+                    <i data-lucide="download" style="width: 16px; height: 16px;"></i> Export Excel
                 </button>
             </div>
             
-            <div class="filter-status" id="filter-status-text">
+            <div class="filter-status" id="filter-status-text" style="padding: 16px 24px 0 24px; font-size: 13px; color: var(--text-muted); font-weight: 500;">
                 Showing: All logs
             </div>
 
-            <div class="table-responsive mt-3">
+            <div class="table-responsive" style="padding: 16px 24px 24px 24px; flex-grow: 1;">
                 <table class="activity-table">
                     <thead>
                         <tr>
@@ -40,12 +52,19 @@
                         </tr>
                     </thead>
                     <tbody id="logs-tbody">
-                        <tr><td colspan="7" style="text-align: center;">Loading...</td></tr>
+                        <tr>
+                            <td colspan="7" style="text-align: center; padding: 40px;">
+                                <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; color: var(--text-muted); gap: 12px;">
+                                    <span style="font-size: 14px; font-weight: 500;">Loading access logs...</span>
+                                </div>
+                            </td>
+                        </tr>
                     </tbody>
                 </table>
             </div>
         </section>
-    </main>
+    </div>
+</main>
 {% endblock %}
 
 {% block scripts %}

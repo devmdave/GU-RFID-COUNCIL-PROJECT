@@ -5,48 +5,50 @@
 
 {% block content %}
 <main class="dashboard-container">
-    <div class="bottom-grid" style="grid-template-columns: 1fr; max-width: 800px; margin: 0 auto;">
+    <div class="bottom-grid" style="grid-template-columns: 1fr; width: 100%; height: calc(100vh - 120px); margin: 0;">
         <!-- Serial Monitor -->
-        <section class="config-panel glass-panel" style="display: flex; flex-direction: column; height: 75vh;">
-            <div class="card-header border-bottom pb-3" style="display: flex; justify-content: space-between; align-items: center;">
+        <section class="config-panel glass-panel" style="display: flex; flex-direction: column; height: 100%; padding: 0;">
+            
+            <div class="card-header border-bottom pb-3" style="padding: 24px 24px 16px 24px; display: flex; justify-content: space-between; align-items: center;">
                 <div style="display: flex; align-items: center; gap: 10px;">
-                    <h3 class="font-space m-0 text-gray">USB DEVICE</h3>
+                    <h3 class="font-space m-0 text-gray">USB DEVICE &amp; SERIAL MONITOR</h3>
                     <i data-lucide="terminal" class="text-gray"></i>
                 </div>
-                <div style="display: flex; align-items: center; gap: 5px; font-size: 12px; font-weight: bold;">
-                    <span id="serial-status-dot" class="pulse-dot" style="background-color: var(--status-red);"></span>
-                    <span id="serial-status-text" class="text-gray">DISCONNECTED</span>
+                <div style="display: flex; align-items: center; gap: 16px;">
+                    <div style="display: flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 600;">
+                        <span id="serial-status-dot" class="pulse-dot" style="background-color: var(--status-red);"></span>
+                        <span id="serial-status-text" class="text-gray">DISCONNECTED</span>
+                    </div>
+                    <button type="button" id="clear-serial-btn" class="btn-secondary" style="height: 32px; padding: 0 12px; font-size: 12px;">Clear Output</button>
                 </div>
             </div>
             
-            <div id="device-info-container" class="mt-3 mb-3 p-3" style="background: rgba(255,255,255,0.05); border-radius: 4px; border: 1px solid rgba(255,255,255,0.1);">
+            <div id="device-info-container" style="background: rgba(255,255,255,0.02); padding: 16px 24px; border-bottom: 1px solid rgba(255,255,255,0.05);">
                 <div style="display: flex; justify-content: space-between; align-items: center;">
                     <div>
-                        <div style="font-weight: bold; margin-bottom: 5px; color: var(--text-light);" id="device-name-display">NodeMCU Not Detected</div>
-                        <div class="text-sm text-gray" id="serial-port-info">No port selected &bull; 115200 baud</div>
+                        <div style="font-weight: 600; margin-bottom: 4px; color: var(--text-light); font-size: 14px;" id="device-name-display">NodeMCU Not Detected</div>
+                        <div class="text-sm text-gray" style="font-size: 12px;" id="serial-port-info">No port selected &bull; 115200 baud</div>
                     </div>
-                    <div id="auto-detected-badge" style="display: none; background: rgba(0, 255, 0, 0.1); color: #0f0; padding: 2px 8px; border-radius: 12px; font-size: 11px; font-weight: bold; border: 1px solid rgba(0, 255, 0, 0.2);">
+                    <div id="auto-detected-badge" style="display: none; background: rgba(16, 185, 129, 0.15); color: var(--status-green); padding: 4px 10px; border-radius: 12px; font-size: 11px; font-weight: 600; border: 1px solid rgba(16, 185, 129, 0.3);">
                         Auto-detected
                     </div>
                 </div>
                 
                 <!-- Manual Fallback -->
-                <div id="manual-fallback-container" style="margin-top: 15px; padding-top: 15px; border-top: 1px dashed rgba(255,255,255,0.1); display: none;">
-                    <label class="text-gray text-sm" style="display: block; margin-bottom: 5px;">Manual Override:</label>
-                    <div style="display: flex; gap: 10px;">
-                        <select id="serial_port" style="flex-grow: 1; padding: 8px; background: rgba(0,0,0,0.2); border: 1px solid rgba(255,255,255,0.1); color: white; border-radius: 4px;">
+                <div id="manual-fallback-container" style="margin-top: 16px; padding-top: 16px; border-top: 1px dashed rgba(255,255,255,0.1); display: none;">
+                    <label class="form-label" style="margin-bottom: 8px;">Manual Override:</label>
+                    <div style="display: flex; gap: 12px;">
+                        <select id="serial_port" class="form-control" style="flex-grow: 1;">
                             <option value="">Select COM Port...</option>
                         </select>
-                        <button type="button" id="refresh-ports" style="padding: 8px 15px; background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2); color: white; border-radius: 4px; cursor: pointer;">Refresh</button>
+                        <button type="button" id="refresh-ports" class="btn-secondary">
+                            <i data-lucide="refresh-cw" style="width:16px;height:16px;"></i> Refresh
+                        </button>
                     </div>
                 </div>
             </div>
             
-            <div style="margin-bottom: 5px; font-size: 12px; color: var(--text-gray); font-weight: bold;">Serial Monitor Output</div>
-            <div id="serial-output" style="flex-grow: 1; background: rgba(0,0,0,0.5); border: 1px solid rgba(255,255,255,0.1); border-radius: 4px; padding: 10px; font-family: monospace; color: #0f0; font-size: 13px; overflow-y: auto; white-space: pre-wrap; word-wrap: break-word;"></div>
-            <div style="display: flex; justify-content: flex-end; margin-top: 15px;">
-                <button type="button" id="clear-serial-btn" style="padding: 8px 15px; background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2); color: white; border-radius: 4px; cursor: pointer;">Clear Output</button>
-            </div>
+            <div id="serial-output" style="flex-grow: 1; background: rgba(0,0,0,0.6); padding: 16px 24px; font-family: monospace; color: #0f0; font-size: 13px; line-height: 1.5; overflow-y: auto; white-space: pre-wrap; word-wrap: break-word; border-bottom-left-radius: 12px; border-bottom-right-radius: 12px;"></div>
         </section>
     </div>
 </main>

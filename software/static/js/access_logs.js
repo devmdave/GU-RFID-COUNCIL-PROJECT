@@ -6,6 +6,17 @@ document.addEventListener('DOMContentLoaded', () => {
     const logsTbody = document.getElementById('logs-tbody');
 
     function fetchLogs() {
+        // Set loading state before fetching
+        logsTbody.innerHTML = `
+            <tr>
+                <td colspan="7" style="text-align: center; padding: 40px;">
+                    <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; color: var(--text-muted); gap: 12px;">
+                        <span style="font-size: 14px; font-weight: 500;">Loading access logs...</span>
+                    </div>
+                </td>
+            </tr>
+        `;
+        
         const dateVal = dateFilter.value;
         let url = '/api/access-logs?limit=all';
         
@@ -27,14 +38,34 @@ document.addEventListener('DOMContentLoaded', () => {
             })
             .catch(err => {
                 console.error('Error fetching logs:', err);
-                logsTbody.innerHTML = '<tr><td colspan="7" style="text-align: center; color: var(--status-red);">Error loading logs.</td></tr>';
+                logsTbody.innerHTML = `
+                    <tr>
+                        <td colspan="7" style="text-align: center; padding: 60px;">
+                            <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; color: var(--status-red); gap: 16px;">
+                                <i data-lucide="alert-triangle" style="width: 48px; height: 48px; opacity: 0.8;"></i>
+                                <span style="font-size: 15px; font-weight: 500;">Error loading logs. Please try again.</span>
+                            </div>
+                        </td>
+                    </tr>
+                `;
+                if (window.lucide) lucide.createIcons();
             });
     }
 
     function renderLogs(logs) {
         logsTbody.innerHTML = '';
         if (logs.length === 0) {
-            logsTbody.innerHTML = '<tr><td colspan="7" style="text-align: center; color: var(--text-muted);">No access logs found.</td></tr>';
+            logsTbody.innerHTML = `
+                <tr>
+                    <td colspan="7" style="text-align: center; padding: 60px;">
+                        <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; color: var(--text-muted); gap: 16px;">
+                            <i data-lucide="file-search" style="width: 48px; height: 48px; opacity: 0.5;"></i>
+                            <span style="font-size: 15px; font-weight: 500;">No access logs found</span>
+                        </div>
+                    </td>
+                </tr>
+            `;
+            if (window.lucide) lucide.createIcons();
             return;
         }
 

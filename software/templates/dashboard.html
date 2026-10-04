@@ -30,7 +30,7 @@
                     <span class="text-gray text-sm font-space">NODEMCU</span>
                     <i data-lucide="cpu" class="text-gray"></i>
                 </div>
-                <div class="card-value text-cyan" id="status-rfid-value" style="display: flex; flex-direction: column; align-items: flex-start;">
+                <div class="card-value text-cyan" id="status-rfid-value">
                     READY
                 </div>
             </div>
@@ -39,7 +39,7 @@
                     <span class="text-gray text-sm font-space">NETWORK</span>
                     <i data-lucide="wifi" class="text-gray"></i>
                 </div>
-                <div class="card-value text-green" id="status-network-value" style="display: flex; flex-direction: column; align-items: flex-start;">
+                <div class="card-value text-green" id="status-network-value">
                     <span class="dot bg-green"></span> CONNECTED
                 </div>
             </div>
@@ -54,8 +54,8 @@
                         <i data-lucide="activity" class="text-gray"></i>
                     </div>
                     {% if current_user.role.name in ['superadmin', 'admin'] %}
-                    <button id="btn-add-user" class="btn-primary" style="padding: 8px 15px; width: auto; font-size: 14px;">
-                        <i data-lucide="user-plus"></i> Add User
+                    <button id="btn-add-user" class="btn-primary">
+                        <i data-lucide="user-plus" style="width:18px; height:18px;"></i> Add User
                     </button>
                     {% endif %}
                 </div>

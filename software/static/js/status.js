@@ -5,14 +5,14 @@ async function fetchAndUpdateWirelessStatus() {
     // Set initial loading state
     statusEls.forEach(container => {
         container.innerHTML = `
-            <div style="display: flex; gap: 20px; font-size: 13px; color: var(--text-gray);">
-                <div>
-                    <strong style="color: var(--text-light);">NodeMCU</strong><br>
-                    <span style="color: #fbbf24;">🟡 Checking...</span>
+            <div class="wireless-status-grid">
+                <div class="wireless-status-item">
+                    <div class="status-label">NODEMCU</div>
+                    <div class="status-indicator" style="color: #fbbf24;">🟡 Checking...</div>
                 </div>
-                <div>
-                    <strong style="color: var(--text-light);">Network</strong><br>
-                    <span style="color: #fbbf24;">🟡 Checking...</span>
+                <div class="wireless-status-item">
+                    <div class="status-label">NETWORK</div>
+                    <div class="status-indicator" style="color: #fbbf24;">🟡 Checking...</div>
                 </div>
             </div>
         `;
@@ -28,37 +28,36 @@ async function fetchAndUpdateWirelessStatus() {
         let nodemcuHtml = '';
         if (nodemcu.status === 'online') {
             nodemcuHtml = `
-                <strong style="color: var(--text-light);">NodeMCU</strong><br>
-                <span style="color: var(--status-green);">🟢 ONLINE</span><br>
-                IP: ${nodemcu.ip}
+                <div class="status-label">NODEMCU</div>
+                <div class="status-indicator text-green">🟢 ONLINE</div>
+                <div class="status-detail">IP: ${nodemcu.ip}</div>
             `;
         } else {
             nodemcuHtml = `
-                <strong style="color: var(--text-light);">NodeMCU</strong><br>
-                <span style="color: var(--status-red);">🔴 OFFLINE</span>
+                <div class="status-label">NODEMCU</div>
+                <div class="status-indicator text-red">🔴 OFFLINE</div>
             `;
         }
         
         let networkHtml = '';
         if (network.status === 'connected') {
             networkHtml = `
-                <strong style="color: var(--text-light);">Network</strong><br>
-                <span style="color: var(--status-green);">🟢 CONNECTED</span><br>
-                ${network.ssid ? 'Wi-Fi: ' + network.ssid + '<br>' : ''}
-                Laptop IP: ${network.ip || 'Unknown'}
+                <div class="status-label">NETWORK</div>
+                <div class="status-indicator text-green">🟢 CONNECTED</div>
+                <div class="status-detail">${network.ssid ? 'Wi-Fi: ' + network.ssid + '<br>' : ''}Laptop IP: ${network.ip || 'Unknown'}</div>
             `;
         } else {
             networkHtml = `
-                <strong style="color: var(--text-light);">Network</strong><br>
-                <span style="color: var(--status-red);">🔴 DISCONNECTED</span>
+                <div class="status-label">NETWORK</div>
+                <div class="status-indicator text-red">🔴 DISCONNECTED</div>
             `;
         }
 
         statusEls.forEach(container => {
             container.innerHTML = `
-                <div style="display: flex; gap: 30px; font-size: 13px; color: var(--text-gray); align-items: flex-start;">
-                    <div>${nodemcuHtml}</div>
-                    <div>${networkHtml}</div>
+                <div class="wireless-status-grid">
+                    <div class="wireless-status-item">${nodemcuHtml}</div>
+                    <div class="wireless-status-item">${networkHtml}</div>
                 </div>
             `;
         });
