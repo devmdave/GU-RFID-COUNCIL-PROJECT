@@ -7,7 +7,9 @@ import re
 import time
 import requests
 from functools import wraps
-from flask import Flask, request, jsonify, render_template, redirect, url_for, session, abort, Response
+from flask import Flask, request, jsonify, render_template, redirect, url_for, session, abort, Response, send_file
+import io
+import openpyxl
 from flask_sqlalchemy import SQLAlchemy
 from flask_migrate import Migrate
 from werkzeug.security import generate_password_hash, check_password_hash
@@ -45,16 +47,28 @@ class Card(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     number = db.Column(db.String(50), unique=True, nullable=False)
     active = db.Column(db.Boolean, default=True, nullable=False)
+    name = db.Column(db.String(100), nullable=True)
+    enrollment = db.Column(db.String(50), nullable=True)
+    role = db.Column(db.String(50), nullable=True)
+    committee = db.Column(db.String(50), nullable=True)
 
 class AccessLog(db.Model):
     __tablename__ = 'access_logs'
     id = db.Column(db.Integer, primary_key=True)
     number = db.Column(db.String(50), nullable=False)
+    name = db.Column(db.String(100), nullable=True)
+    enrollment = db.Column(db.String(50), nullable=True)
+    role = db.Column(db.String(50), nullable=True)
+    committee = db.Column(db.String(50), nullable=True)
     access = db.Column(db.String(20), nullable=False)
+    attendance = db.Column(db.String(20), nullable=True)
     timestamp = db.Column(db.DateTime, default=datetime.datetime.utcnow)
 
 # SSE client queues
 sse_clients = []
+
+# Global memory for NodeMCU IP
+last_known_nodemcu_ip = None
 
 # --- AUTH & RBAC DECORATORS ---
 
@@ -126,6 +140,11 @@ def logout():
 def dashboard():
     return render_template('dashboard.html')
 
+@app.route('/access-logs')
+@login_required
+def access_logs_page():
+    return render_template('access_logs.html')
+
 @app.route('/settings')
 @login_required
 @role_required('superadmin', 'admin')
@@ -176,6 +195,9 @@ def create_user():
 
 @app.route('/verify', methods=['POST'])
 def verify():
+    global last_known_nodemcu_ip
+    last_known_nodemcu_ip = request.remote_addr
+    
     data = request.get_json()
     if not data or 'number' not in data:
         return jsonify({"success": False, "error": "Missing number in payload"}), 400
@@ -183,43 +205,206 @@ def verify():
     number = str(data['number']).strip()
     if not number:
         return jsonify({"success": False, "error": "Empty number"}), 400
+        
     card = Card.query.filter_by(number=number).first()
-    access_status = "granted" if card and card.active else "denied"   
- 
-    new_log = AccessLog(number=number, access=access_status)
-    db.session.add(new_log)
-    db.session.commit()
-
-    event_data = {
-        "id": new_log.id,
-        "number": number,
-        "access": access_status,
-        "timestamp": new_log.timestamp.strftime("%H:%M:%S")
-    }
+    if not card or not card.active:
+        return jsonify({"success": False, "access": "denied", "message": "Card not found or inactive"})
+        
+    now = datetime.datetime.utcnow()
     
-    for q in sse_clients:
-        q.put({"success": True, "scan": event_data})
-
-    print(f"Received number: {number}", file=sys.stderr)
-    print(f"Access: {access_status.upper()}", file=sys.stderr)
-    
-    return jsonify({"success": True, "access": access_status})
+    if card.enrollment:
+        latest_log = AccessLog.query.filter_by(enrollment=card.enrollment).order_by(AccessLog.timestamp.desc()).first()
+    else:
+        latest_log = AccessLog.query.filter_by(number=number).order_by(AccessLog.timestamp.desc()).first()
+        
+    if latest_log and latest_log.access == 'ENTRY' and latest_log.attendance == 'PENDING':
+        elapsed = (now - latest_log.timestamp).total_seconds()
+        if elapsed >= 15 * 60:
+            access_status = "EXIT"
+            attendance_status = "COUNTED"
+            logged = True
+            
+            new_log = AccessLog(
+                number=number,
+                name=card.name,
+                enrollment=card.enrollment,
+                role=card.role,
+                committee=card.committee,
+                access=access_status,
+                attendance=attendance_status,
+                timestamp=now
+            )
+            db.session.add(new_log)
+            db.session.commit()
+            
+            event_data = {
+                "id": new_log.id,
+                "number": number,
+                "name": card.name,
+                "enrollment": card.enrollment,
+                "role": card.role,
+                "committee": card.committee,
+                "access": access_status,
+                "attendance": attendance_status,
+                "timestamp": new_log.timestamp.strftime("%H:%M:%S")
+            }
+            
+            for q in sse_clients:
+                q.put({"success": True, "scan": event_data})
+                
+            return jsonify({
+                "success": True,
+                "access": "exit",
+                "attendance": "counted",
+                "logged": True
+            })
+        else:
+            event_data = {
+                "number": number,
+                "name": card.name,
+                "access": "blocked",
+                "message": "Minimum 15 minutes are required between Entry and Exit."
+            }
+            for q in sse_clients:
+                q.put({"success": True, "scan": event_data, "blocked": True})
+                
+            return jsonify({
+                "success": True,
+                "access": "blocked",
+                "attendance": "not_counted",
+                "logged": False,
+                "message": "Attendance will not be counted. Minimum 15 minutes are required between Entry and Exit."
+            })
+    else:
+        access_status = "ENTRY"
+        attendance_status = "PENDING"
+        logged = True
+        
+        new_log = AccessLog(
+            number=number,
+            name=card.name,
+            enrollment=card.enrollment,
+            role=card.role,
+            committee=card.committee,
+            access=access_status,
+            attendance=attendance_status,
+            timestamp=now
+        )
+        db.session.add(new_log)
+        db.session.commit()
+        
+        event_data = {
+            "id": new_log.id,
+            "number": number,
+            "name": card.name,
+            "enrollment": card.enrollment,
+            "role": card.role,
+            "committee": card.committee,
+            "access": access_status,
+            "attendance": attendance_status,
+            "timestamp": new_log.timestamp.strftime("%H:%M:%S")
+        }
+        
+        for q in sse_clients:
+            q.put({"success": True, "scan": event_data})
+            
+        return jsonify({
+            "success": True,
+            "access": "entry",
+            "attendance": "pending",
+            "logged": True
+        })
 
 @app.route('/api/access-logs', methods=['GET'])
 @login_required
 def access_logs():
-    logs = AccessLog.query.order_by(AccessLog.timestamp.desc()).limit(15).all()
+    query = AccessLog.query
+    
+    date_str = request.args.get('date')
+    if date_str:
+        try:
+            target_date = datetime.datetime.strptime(date_str, '%Y-%m-%d').date()
+            start_dt = datetime.datetime.combine(target_date, datetime.datetime.min.time())
+            end_dt = datetime.datetime.combine(target_date, datetime.datetime.max.time())
+            query = query.filter(AccessLog.timestamp >= start_dt, AccessLog.timestamp <= end_dt)
+        except ValueError:
+            pass
+            
+    query = query.order_by(AccessLog.timestamp.desc())
+    
+    limit_str = request.args.get('limit')
+    if limit_str != 'all':
+        try:
+            limit = int(limit_str) if limit_str else 15
+            query = query.limit(limit)
+        except ValueError:
+            query = query.limit(15)
+            
+    logs = query.all()
     logs_data = [{
         "id": log.id,
         "number": log.number,
+        "name": log.name,
+        "enrollment": log.enrollment,
+        "role": log.role,
+        "committee": log.committee,
         "access": log.access,
-        "timestamp": log.timestamp.strftime("%H:%M:%S")
+        "attendance": log.attendance,
+        "timestamp": log.timestamp.strftime("%Y-%m-%d %H:%M:%S")
     } for log in logs]
     
     return jsonify({
         "success": True,
         "logs": logs_data
     })
+
+@app.route('/api/access-logs/export', methods=['GET'])
+@login_required
+def export_access_logs():
+    query = AccessLog.query
+    date_str = request.args.get('date')
+    filename = "access_logs_all.xlsx"
+    
+    if date_str:
+        try:
+            target_date = datetime.datetime.strptime(date_str, '%Y-%m-%d').date()
+            start_dt = datetime.datetime.combine(target_date, datetime.datetime.min.time())
+            end_dt = datetime.datetime.combine(target_date, datetime.datetime.max.time())
+            query = query.filter(AccessLog.timestamp >= start_dt, AccessLog.timestamp <= end_dt)
+            filename = f"access_logs_{date_str}.xlsx"
+        except ValueError:
+            pass
+            
+    logs = query.order_by(AccessLog.timestamp.desc()).all()
+    
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "Access Logs"
+    
+    headers = ["Name", "Enrollment", "Role", "Committee", "Timestamp", "Access", "Attendance"]
+    ws.append(headers)
+    
+    for log in logs:
+        ws.append([
+            log.name or '-',
+            log.enrollment or '-',
+            log.role or '-',
+            log.committee or '-',
+            log.timestamp.strftime("%Y-%m-%d %H:%M:%S") if log.timestamp else '-',
+            log.access or '-',
+            log.attendance or '-'
+        ])
+        
+    output = io.BytesIO()
+    wb.save(output)
+    output.seek(0)
+    
+    return send_file(
+        output,
+        as_attachment=True,
+        download_name=filename,
+        mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+    )
 
 @app.route('/api/scan-events', methods=['GET'])
 @login_required
@@ -299,6 +484,46 @@ def serial_stream():
             yield f"data: {json.dumps({'type': 'serial', 'line': 'ERROR: Serial Bridge disconnected.'})}\n\n"
             
     return Response(generate(), mimetype='text/event-stream')
+
+@app.route('/api/device/status', methods=['GET'])
+@login_required
+def device_status():
+    try:
+        r = requests.get('http://host.docker.internal:8765/network-status', timeout=5)
+        net_info = r.json()
+    except Exception:
+        net_info = {
+            "status": "disconnected",
+            "ip": None,
+            "ssid": None,
+            "interface": None
+        }
+        
+    nodemcu_info = {
+        "status": "offline",
+        "device": "NodeMCU",
+        "ip": None,
+        "uptime": None
+    }
+    
+    global last_known_nodemcu_ip
+    
+    if last_known_nodemcu_ip:
+        nodemcu_info["ip"] = last_known_nodemcu_ip
+        try:
+            r = requests.get(f'http://{last_known_nodemcu_ip}/status', timeout=2)
+            if r.status_code == 200:
+                data = r.json()
+                nodemcu_info.update(data)
+                nodemcu_info["status"] = "online"
+        except Exception:
+            pass
+            
+    return jsonify({
+        "success": True,
+        "nodemcu": nodemcu_info,
+        "network": net_info
+    })
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000)

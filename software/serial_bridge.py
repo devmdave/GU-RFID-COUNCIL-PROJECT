@@ -5,6 +5,8 @@ import queue
 from flask import Flask, request, jsonify, Response
 import serial
 import serial.tools.list_ports
+import socket
+import subprocess
 
 app = Flask(__name__)
 
@@ -211,6 +213,38 @@ def stream():
                 stream_queues.remove(q)
                 
     return Response(generate(), mimetype='text/event-stream')
+
+@app.route('/network-status', methods=['GET'])
+def network_status():
+    s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    try:
+        s.connect(('8.8.8.8', 80))
+        ip = s.getsockname()[0]
+    except Exception:
+        ip = None
+    finally:
+        s.close()
+        
+    ssid = None
+    interface = None
+    try:
+        output = subprocess.check_output('netsh wlan show interfaces', text=True)
+        for line in output.split('\n'):
+            line = line.strip()
+            if line.startswith('Name'):
+                interface = line.split(':', 1)[1].strip()
+            elif line.startswith('SSID') and not line.startswith('BSSID'):
+                ssid = line.split(':', 1)[1].strip()
+    except Exception:
+        pass
+        
+    status = "connected" if ip else "disconnected"
+    return jsonify({
+        "status": status,
+        "ip": ip,
+        "ssid": ssid,
+        "interface": interface
+    })
 
 @app.route('/configure', methods=['POST'])
 def configure():

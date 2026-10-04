@@ -20,7 +20,7 @@
             {% endif %}
         </div>
         <div class="nav-right">
-            <div class="status-indicator">
+            <div class="status-indicator" id="nav-status-indicator">
                 <span class="pulse-dot"></span> System Online
             </div>
             <div class="user-profile">
@@ -32,6 +32,9 @@
 
     <main class="dashboard-container">
         <h2 class="font-space section-title">SYSTEM SETTINGS</h2>
+        
+        <!-- Wireless Status Display -->
+        <div class="wireless-status-container"></div>
         
         <div class="bottom-grid" style="grid-template-columns: 1fr 1fr; gap: 20px; align-items: start;">
             <!-- Device Configuration -->
@@ -363,5 +366,6 @@
             }
         }
     </script>
+    <script src="{{ url_for('static', filename='js/status.js') }}"></script>
 </body>
 </html>
