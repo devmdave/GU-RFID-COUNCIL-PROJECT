@@ -796,6 +796,96 @@ select.form-control {
     color: white;
 }
 
+/* Modal Internal Elements */
+.modal-card {
+    text-align: center;
+}
+
+.modal-icon-container {
+    width: 64px;
+    height: 64px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 0 auto;
+    transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+.modal-main-icon {
+    width: 32px;
+    height: 32px;
+}
+
+.modal-details {
+    background: rgba(0, 0, 0, 0.2);
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    border-radius: 8px;
+    padding: 16px;
+    margin: 16px 0;
+}
+
+/* Modal States */
+.modal-granted {
+    border-color: rgba(16, 185, 129, 0.4);
+    box-shadow: 0 4px 30px rgba(16, 185, 129, 0.15);
+}
+
+.modal-granted .modal-icon-container {
+    background: var(--status-green-glow);
+    color: var(--status-green);
+    box-shadow: 0 0 20px var(--status-green-glow);
+}
+
+.modal-granted #modal-title {
+    color: var(--status-green);
+}
+
+.modal-denied {
+    border-color: rgba(244, 63, 94, 0.4);
+    box-shadow: 0 4px 30px rgba(244, 63, 94, 0.15);
+}
+
+.modal-denied .modal-icon-container {
+    background: var(--status-red-glow);
+    color: var(--status-red);
+    box-shadow: 0 0 20px var(--status-red-glow);
+}
+
+.modal-denied #modal-title {
+    color: var(--status-red);
+}
+
+.modal-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 6px 16px;
+    border-radius: 20px;
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 1px;
+    gap: 6px;
+    margin-top: 8px;
+}
+
+.modal-badge i {
+    width: 14px;
+    height: 14px;
+}
+
+.modal-granted .modal-badge {
+    background: var(--status-green-glow);
+    color: var(--status-green);
+    border: 1px solid rgba(16, 185, 129, 0.3);
+}
+
+.modal-denied .modal-badge {
+    background: var(--status-red-glow);
+    color: var(--status-red);
+    border: 1px solid rgba(244, 63, 94, 0.3);
+}
+
 /* Login specific */
 .login-container {
     min-height: 100vh;
