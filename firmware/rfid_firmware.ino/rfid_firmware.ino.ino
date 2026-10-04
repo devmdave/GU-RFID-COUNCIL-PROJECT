@@ -1,3 +1,4 @@
+// RFID FIRMWARE MADE BY DEVMDAVE V1.0 
 #include <SPI.h>
 #include <MFRC522.h>
 #include <ESP8266WiFi.h>
@@ -55,6 +56,11 @@ String readNDEFText();
 bool verifyCard(String number);
 bool checkForConfigCommand();
 void handleStatus();
+bool handleWriterCommand(String command);
+void writerMode(String cardNumber);
+bool writeNDEFNumber(String cardNumber);
+bool writeBlock(byte blockNumber, byte *data);
+void finishCard();
 
 // =====================================================
 // DEFAULT CONFIG
@@ -157,6 +163,7 @@ bool checkForConfigCommand() {
   if (!Serial.available()) {
     return false;
   }
+
   String command = Serial.readStringUntil('\n');
   command.trim();
 
@@ -164,6 +171,19 @@ bool checkForConfigCommand() {
     serialConfigMode();
     return true;
   }
+
+  // Dashboard/serial bridge can send:
+  // WRITE_NUMBER=<number>
+  if (command.startsWith("WRITE_NUMBER=")) {
+    if (handleWriterCommand(command)) {
+      return true;
+    }
+
+    // handleWriterCommand() only returns false for invalid writer data.
+    // Consume the command so normal RFID reading does not process it.
+    return true;
+  }
+
   return false;
 }
 
@@ -256,6 +276,211 @@ void serialConfigMode() {
 }
 
 // =====================================================
+// RFID WRITER MODE
+// =====================================================
+
+bool handleWriterCommand(String command) {
+  const String prefix = "WRITE_NUMBER=";
+  if (!command.startsWith(prefix)) {
+    return false;
+  }
+
+  String cardNumber = command.substring(prefix.length());
+  cardNumber.trim();
+
+  if (cardNumber.length() == 0) {
+    Serial.println("WRITE_FAILED");
+    Serial.println("WRITE_ERROR: EMPTY_CARD_NUMBER");
+    return true;
+  }
+
+  // Card number is intentionally kept as a String so leading zeros survive.
+  // The current NDEF writer uses a normal short NDEF Text record and the
+  // blocks 4, 5 and 6. Block 7 is never written.
+  if (cardNumber.length() > 24) {
+    Serial.println("WRITE_FAILED");
+    Serial.println("WRITE_ERROR: CARD_NUMBER_TOO_LONG_MAX_24_DIGITS");
+    return true;
+  }
+
+  for (unsigned int i = 0; i < cardNumber.length(); i++) {
+    if (!isDigit(cardNumber[i])) {
+      Serial.println("WRITE_FAILED");
+      Serial.println("WRITE_ERROR: CARD_NUMBER_MUST_BE_NUMERIC");
+      return true;
+    }
+  }
+
+  writerMode(cardNumber);
+  return true;
+}
+
+void writerMode(String cardNumber) {
+  Serial.println();
+  Serial.println("====================================");
+  Serial.println("          RFID WRITER MODE");
+  Serial.println("====================================");
+  Serial.println("WRITER_MODE_READY");
+  Serial.println("Place card on RC522...");
+
+  while (true) {
+    // Allow the PC/serial bridge to cancel writer mode.
+    if (Serial.available()) {
+      String command = Serial.readStringUntil('\n');
+      command.trim();
+
+      if (command.equalsIgnoreCase("EXIT_WRITER")) {
+        Serial.println("WRITER_MODE_EXIT");
+        Serial.println("READER_MODE");
+        return;
+      }
+    }
+
+    if (!rfid.PICC_IsNewCardPresent()) {
+      delay(50);
+      yield();
+      continue;
+    }
+
+    if (!rfid.PICC_ReadCardSerial()) {
+      delay(50);
+      yield();
+      continue;
+    }
+
+    Serial.println("CARD_DETECTED");
+    Serial.println("WRITING_CARD");
+
+    bool success = writeNDEFNumber(cardNumber);
+
+    if (success) {
+      Serial.println("WRITE_SUCCESS");
+    } else {
+      Serial.println("WRITE_FAILED");
+    }
+
+    finishCard();
+    delay(300);
+
+    Serial.println("WRITER_MODE_EXIT");
+    Serial.println("READER_MODE");
+    return;
+  }
+}
+
+bool writeNDEFNumber(String cardNumber) {
+  // This writer follows the standalone writer firmware supplied for this
+  // project. The existing reader/NDEF parser is not modified.
+
+  byte ndef[32];
+  int ndefLength = 0;
+
+  // NDEF Text Record header
+  ndef[ndefLength++] = 0xD1;
+  ndef[ndefLength++] = 0x01;
+
+  // 1 status + 2 language bytes + card number
+  byte payloadLength = 3 + cardNumber.length();
+  ndef[ndefLength++] = payloadLength;
+  ndef[ndefLength++] = 0x54;  // Text type
+  ndef[ndefLength++] = 0x02;  // UTF-8, language length = 2
+  ndef[ndefLength++] = 0x65;  // 'e'
+  ndef[ndefLength++] = 0x6E;  // 'n'
+
+  for (unsigned int i = 0; i < cardNumber.length(); i++) {
+    ndef[ndefLength++] = cardNumber[i];
+  }
+
+  // NDEF TLV
+  byte data[40];
+  int dataLength = 0;
+
+  data[dataLength++] = 0x03;
+  data[dataLength++] = ndefLength;
+
+  for (int i = 0; i < ndefLength; i++) {
+    data[dataLength++] = ndef[i];
+  }
+
+  data[dataLength++] = 0xFE;
+
+  // Prepare blocks 4, 5 and 6 exactly like the supplied working writer.
+  byte block4[16] = {0};
+  byte block5[16] = {0};
+  byte block6[16] = {0};
+
+  for (int i = 0; i < 16 && i < dataLength; i++) {
+    block4[i] = data[i];
+  }
+
+  for (int i = 16; i < 32 && i < dataLength; i++) {
+    block5[i - 16] = data[i];
+  }
+
+  for (int i = 32; i < 48 && i < dataLength; i++) {
+    block6[i - 32] = data[i];
+  }
+
+  // IMPORTANT: only blocks 4, 5 and 6 are written.
+  // Block 7 is the sector trailer and is NEVER touched.
+  if (!writeBlock(4, block4)) {
+    return false;
+  }
+
+  if (!writeBlock(5, block5)) {
+    return false;
+  }
+
+  if (!writeBlock(6, block6)) {
+    return false;
+  }
+
+  Serial.print("NDEF Number Written: ");
+  Serial.println(cardNumber);
+
+  return true;
+}
+
+bool writeBlock(byte blockNumber, byte *data) {
+  MFRC522::StatusCode status;
+
+  status = rfid.PCD_Authenticate(
+    MFRC522::PICC_CMD_MF_AUTH_KEY_A,
+    blockNumber,
+    &key,
+    &(rfid.uid)
+  );
+
+  if (status != MFRC522::STATUS_OK) {
+    Serial.print("Authentication failed on block ");
+    Serial.print(blockNumber);
+    Serial.print(": ");
+    Serial.println(rfid.GetStatusCodeName(status));
+    return false;
+  }
+
+  status = rfid.MIFARE_Write(blockNumber, data, 16);
+
+  if (status != MFRC522::STATUS_OK) {
+    Serial.print("Write failed on block ");
+    Serial.print(blockNumber);
+    Serial.print(": ");
+    Serial.println(rfid.GetStatusCodeName(status));
+    return false;
+  }
+
+  Serial.print("Block ");
+  Serial.print(blockNumber);
+  Serial.println(" written.");
+  return true;
+}
+
+void finishCard() {
+  rfid.PICC_HaltA();
+  rfid.PCD_StopCrypto1();
+}
+
+// =====================================================
 // CONNECT WI-FI
 // =====================================================
 
@@ -276,6 +501,12 @@ bool connectWiFi() {
         Serial.println("\nUSB CONFIG requested.");
         serialConfigMode();
         return false;
+      }
+
+      if (command.startsWith("WRITE_NUMBER=")) {
+        handleWriterCommand(command);
+        // Writer mode is independent of Wi-Fi connectivity.
+        // After it finishes, continue waiting for Wi-Fi.
       }
     }
 

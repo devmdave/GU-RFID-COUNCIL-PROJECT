@@ -315,6 +315,27 @@ def configure():
         else:
             return jsonify({"success": True, "message": "Device configuration saved successfully (unconfirmed)"})
 
+@app.route('/write', methods=['POST'])
+def write_card():
+    data = request.get_json()
+    if not data or not data.get('number'):
+        return jsonify({"success": False, "error": "Missing number"}), 400
+        
+    number = data['number']
+    
+    global active_ser, active_port
+    
+    if not active_ser or not active_ser.is_open:
+        return jsonify({"success": False, "error": "NodeMCU is not connected."}), 400
+        
+    with ser_lock:
+        try:
+            cmd = f"WRITE_NUMBER={number}\n"
+            active_ser.write(cmd.encode())
+            return jsonify({"success": True, "message": "Write command sent"})
+        except Exception as e:
+            return jsonify({"success": False, "error": str(e)}), 400
+
 if __name__ == '__main__':
     print("Serial Bridge running on 127.0.0.1:8765")
     app.run(host='127.0.0.1', port=8765, threaded=True)

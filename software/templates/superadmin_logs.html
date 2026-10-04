@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RFID ACCESS - Superadmin Logs</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+        .btn-delete {
+            background: rgba(239, 68, 68, 0.1);
+            color: var(--status-red);
+            border: 1px solid rgba(239, 68, 68, 0.3);
+            padding: 6px 10px;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            font-size: 12px;
+        }
+        .btn-delete:hover {
+            background: rgba(239, 68, 68, 0.2);
+        }
+        .navbar-superadmin {
+            border-bottom: 1px solid var(--status-red);
+        }
+    </style>
+</head>
+<body>
+    <nav class="navbar glass-panel navbar-superadmin">
+        <div class="nav-left">
+            <i data-lucide="shield-alert" style="color: var(--status-red);"></i>
+            <span class="nav-brand font-space" style="color: var(--status-red);">SUPERADMIN</span>
+            <span class="nav-link active">Access Logs Management</span>
+        </div>
+        <div class="nav-right">
+            <div class="user-profile">
+                <i data-lucide="user-check"></i> {{ current_user.username }}
+            </div>
+            <form action="{{ url_for('superadmin_logout') }}" method="POST" style="margin: 0;">
+                <button type="submit" class="btn-logout" style="background: none; border: none; cursor: pointer; color: var(--text-gray); display: flex; align-items: center; gap: 8px;"><i data-lucide="log-out"></i> Logout</button>
+            </form>
+        </div>
+    </nav>
+
+    <main class="dashboard-container">
+        <section class="activity-panel glass-panel">
+            <div class="card-header border-bottom pb-3">
+                <h3 class="font-space m-0 text-white">ACCESS LOGS MANAGEMENT</h3>
+                <i data-lucide="database" class="text-gray"></i>
+            </div>
+            
+            <div id="status-message" style="display: none; margin-top: 15px; padding: 10px; border-radius: 6px; font-size: 14px;"></div>
+
+            <div class="table-responsive mt-3">
+                <table class="activity-table" id="logs-table">
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>NAME</th>
+                            <th>ENROLLMENT</th>
+                            <th>ROLE</th>
+                            <th>COMMITTEE</th>
+                            <th>TIMESTAMP</th>
+                            <th>ACCESS</th>
+                            <th>ATTENDANCE</th>
+                            <th>ACTIONS</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for log in logs %}
+                        <tr id="log-row-{{ log.id }}">
+                            <td class="text-gray">#{{ log.id }}</td>
+                            <td class="font-space">{{ log.name or '-' }}</td>
+                            <td class="font-space">{{ log.enrollment or '-' }}</td>
+                            <td>{{ log.role or '-' }}</td>
+                            <td>{{ log.committee or '-' }}</td>
+                            <td>{{ log.timestamp.strftime('%Y-%m-%d %H:%M:%S') if log.timestamp else '-' }}</td>
+                            <td>
+                                {% if log.access == 'ENTRY' %}
+                                <span class="badge badge-entry">ENTRY</span>
+                                {% else %}
+                                <span class="badge badge-exit">EXIT</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if log.attendance == 'COUNTED' %}
+                                <span class="badge badge-counted">COUNTED</span>
+                                {% elif log.attendance == 'PENDING' %}
+                                <span class="badge badge-pending">PENDING</span>
+                                {% else %}
+                                <span class="badge badge-denied">{{ log.attendance or '-' }}</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                <button class="btn-delete" onclick="deleteLog({{ log.id }})">
+                                    <i data-lucide="trash-2" style="width: 14px; height: 14px;"></i> Delete
+                                </button>
+                            </td>
+                        </tr>
+                        {% else %}
+                        <tr>
+                            <td colspan="9" class="text-center text-gray">No access logs found.</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </section>
+    </main>
+
+    <script>
+        lucide.createIcons();
+
+        function showMessage(msg, isError) {
+            const el = document.getElementById('status-message');
+            el.style.display = 'block';
+            el.textContent = msg;
+            if (isError) {
+                el.style.background = 'rgba(239, 68, 68, 0.1)';
+                el.style.color = 'var(--status-red)';
+                el.style.border = '1px solid rgba(239, 68, 68, 0.2)';
+            } else {
+                el.style.background = 'rgba(16, 185, 129, 0.1)';
+                el.style.color = 'var(--status-green)';
+                el.style.border = '1px solid rgba(16, 185, 129, 0.2)';
+            }
+            setTimeout(() => {
+                el.style.display = 'none';
+            }, 5000);
+        }
+
+        async function deleteLog(logId) {
+            if (!confirm(`Are you sure you want to delete access log #${logId}?`)) {
+                return;
+            }
+            
+            try {
+                const response = await fetch(`/superadmin/logs/${logId}`, {
+                    method: 'DELETE',
+                    headers: { 'Content-Type': 'application/json' }
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok && data.success) {
+                    const row = document.getElementById(`log-row-${logId}`);
+                    if (row) row.remove();
+                    showMessage(`Log #${logId} deleted successfully.`, false);
+                } else {
+                    showMessage(`Failed to delete log: ${data.error || 'Unknown error'}`, true);
+                }
+            } catch (err) {
+                console.error(err);
+                showMessage('An error occurred while deleting the log.', true);
+            }
+        }
+    </script>
+</body>
+</html>

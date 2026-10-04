@@ -10,6 +10,13 @@ from functools import wraps
 from flask import Flask, request, jsonify, render_template, redirect, url_for, session, abort, Response, send_file
 import io
 import openpyxl
+import pytz
+import random
+import threading
+
+def get_ist_time():
+    ist = pytz.timezone('Asia/Kolkata')
+    return datetime.datetime.now(ist).replace(tzinfo=None)
 from flask_sqlalchemy import SQLAlchemy
 from flask_migrate import Migrate
 from werkzeug.security import generate_password_hash, check_password_hash
@@ -37,8 +44,8 @@ class User(db.Model):
     password_hash = db.Column(db.String(255), nullable=False)
     role_id = db.Column(db.Integer, db.ForeignKey('roles.id'), nullable=False)
     is_active = db.Column(db.Boolean, default=True, nullable=False)
-    created_at = db.Column(db.DateTime, default=datetime.datetime.utcnow)
-    updated_at = db.Column(db.DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=get_ist_time)
+    updated_at = db.Column(db.DateTime, default=get_ist_time, onupdate=get_ist_time)
     
     role = db.relationship('Role', backref=db.backref('users', lazy=True))
 
@@ -62,13 +69,17 @@ class AccessLog(db.Model):
     committee = db.Column(db.String(50), nullable=True)
     access = db.Column(db.String(20), nullable=False)
     attendance = db.Column(db.String(20), nullable=True)
-    timestamp = db.Column(db.DateTime, default=datetime.datetime.utcnow)
+    timestamp = db.Column(db.DateTime, default=get_ist_time)
 
 # SSE client queues
 sse_clients = []
 
 # Global memory for NodeMCU IP
 last_known_nodemcu_ip = None
+
+# Card writing concurrency
+is_writing_card = False
+writing_lock = threading.Lock()
 
 # --- AUTH & RBAC DECORATORS ---
 
@@ -210,7 +221,7 @@ def verify():
     if not card or not card.active:
         return jsonify({"success": False, "access": "denied", "message": "Card not found or inactive"})
         
-    now = datetime.datetime.utcnow()
+    now = get_ist_time()
     
     if card.enrollment:
         latest_log = AccessLog.query.filter_by(enrollment=card.enrollment).order_by(AccessLog.timestamp.desc()).first()
@@ -524,6 +535,166 @@ def device_status():
         "nodemcu": nodemcu_info,
         "network": net_info
     })
+
+def superadmin_required(f):
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        user = get_current_user()
+        if not user:
+            if request.method != 'GET':
+                return jsonify({"success": False, "error": "Unauthorized"}), 401
+            return redirect(url_for('superadmin_login'))
+        if user.role.name != 'superadmin':
+            return "You do not have permission to access this page.", 403
+        return f(*args, **kwargs)
+    return decorated_function
+    
+@app.route('/superadmin/login', methods=['GET', 'POST'])
+def superadmin_login():
+    if request.method == 'POST':
+        username = request.form.get('username')
+        password = request.form.get('password')
+        
+        user = User.query.filter_by(username=username).first()
+        if user and user.is_active and check_password_hash(user.password_hash, password):
+            if user.role.name == 'superadmin':
+                session['user_id'] = user.id
+                return redirect(url_for('superadmin_logs'))
+            else:
+                return render_template('superadmin_login.html', error="Access denied: Superadmin role required")
+        else:
+            return render_template('superadmin_login.html', error="Invalid credentials or inactive account")
+            
+    user = get_current_user()
+    if user and user.role.name == 'superadmin':
+        return redirect(url_for('superadmin_logs'))
+        
+    return render_template('superadmin_login.html')
+
+@app.route('/superadmin/logout', methods=['POST'])
+def superadmin_logout():
+    session.pop('user_id', None)
+    return redirect(url_for('superadmin_login'))
+
+@app.route('/superadmin/logs', methods=['GET'])
+@superadmin_required
+def superadmin_logs():
+    logs = AccessLog.query.order_by(AccessLog.timestamp.desc()).all()
+    return render_template('superadmin_logs.html', logs=logs)
+
+@app.route('/superadmin/logs/<int:log_id>', methods=['DELETE'])
+@superadmin_required
+def delete_superadmin_log(log_id):
+    log = AccessLog.query.get(log_id)
+    if not log:
+        return jsonify({"success": False, "error": "Log not found"}), 404
+        
+    db.session.delete(log)
+    db.session.commit()
+    return jsonify({"success": True})
+
+@app.route('/api/cards/new', methods=['POST'])
+@login_required
+@role_required('superadmin', 'admin')
+def new_card():
+    global is_writing_card
+    
+    with writing_lock:
+        if is_writing_card:
+            return jsonify({"success": False, "error": "Another card-writing operation is already in progress."}), 400
+            
+        data = request.get_json()
+        name = data.get('name')
+        enrollment = data.get('enrollment')
+        role = data.get('role')
+        committee = data.get('committee')
+        
+        if not name or not enrollment:
+            return jsonify({"success": False, "error": "Name and Enrollment are required"}), 400
+            
+        # Generate unique 11-digit string starting with 0
+        while True:
+            number = f"0{random.randint(1000000000, 9999999999)}"
+            if not Card.query.filter_by(number=number).first():
+                break
+                
+        # Create pending card
+        pending_card = Card(
+            number=number,
+            name=name,
+            enrollment=enrollment,
+            role=role,
+            committee=committee,
+            active=False
+        )
+        db.session.add(pending_card)
+        db.session.commit()
+        
+        # Send WRITE_NUMBER to Serial Bridge
+        try:
+            r = requests.post('http://host.docker.internal:8765/write', json={"number": number}, timeout=5)
+            if r.status_code != 200:
+                db.session.delete(pending_card)
+                db.session.commit()
+                err = r.json().get('error', 'Serial Bridge error')
+                return jsonify({"success": False, "error": err}), 400
+                
+            is_writing_card = True
+            return jsonify({"success": True, "number": number, "message": "Pending record created, sent WRITE command."})
+            
+        except requests.RequestException:
+            db.session.delete(pending_card)
+            db.session.commit()
+            return jsonify({"success": False, "error": "Serial Bridge is not running or unavailable."}), 502
+
+@app.route('/api/cards/activate', methods=['POST'])
+@login_required
+@role_required('superadmin', 'admin')
+def activate_card():
+    global is_writing_card
+    data = request.get_json()
+    number = data.get('number')
+    
+    if not number:
+        return jsonify({"success": False, "error": "Number required"}), 400
+        
+    card = Card.query.filter_by(number=number).first()
+    if not card:
+        return jsonify({"success": False, "error": "Card not found"}), 404
+        
+    card.active = True
+    db.session.commit()
+    
+    with writing_lock:
+        is_writing_card = False
+        
+    return jsonify({"success": True})
+
+@app.route('/api/cards/cancel', methods=['POST'])
+@login_required
+@role_required('superadmin', 'admin')
+def cancel_write():
+    global is_writing_card
+    data = request.get_json()
+    number = data.get('number')
+    
+    with writing_lock:
+        is_writing_card = False
+        
+    if number:
+        card = Card.query.filter_by(number=number, active=False).first()
+        if card:
+            db.session.delete(card)
+            db.session.commit()
+            
+    # Instruct firmware to return to reader mode if needed
+    try:
+        requests.post('http://host.docker.internal:8765/write', json={"number": "READER_MODE"}, timeout=2)
+    except:
+        pass
+        
+    return jsonify({"success": True})
+
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000)

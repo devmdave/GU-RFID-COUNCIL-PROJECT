@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RFID ACCESS - Logs</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+        .filter-controls {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+        .filter-controls input[type="date"] {
+            background: rgba(0, 0, 0, 0.2);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            color: white;
+            padding: 8px 12px;
+            border-radius: 6px;
+            font-family: 'Inter', sans-serif;
+            color-scheme: dark;
+        }
+        .btn-filter, .btn-export, .btn-clear {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            color: white;
+            padding: 8px 15px;
+            border-radius: 6px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            transition: all 0.3s;
+        }
+        .btn-filter:hover, .btn-export:hover, .btn-clear:hover {
+            background: rgba(255, 255, 255, 0.1);
+        }
+        .btn-export {
+            background: var(--status-green-glow);
+            border-color: var(--status-green);
+            color: var(--status-green);
+        }
+        .btn-export:hover {
+            background: var(--status-green);
+            color: white;
+        }
+        .filter-status {
+            color: var(--text-muted);
+            font-size: 14px;
+            margin-bottom: 15px;
+        }
+    </style>
+</head>
+<body>
+    <nav class="navbar glass-panel">
+        <div class="nav-left">
+            <i data-lucide="shield-check" class="text-cyan"></i>
+            <span class="nav-brand font-space">RFID ACCESS</span>
+            <a href="{{ url_for('dashboard') }}" class="nav-link">Dashboard</a>
+            <a href="{{ url_for('access_logs_page') }}" class="nav-link active">Access Logs</a>
+            {% if current_user.role.name in ['superadmin', 'admin'] %}
+            <a href="{{ url_for('settings') }}" class="nav-link">Settings</a>
+            {% endif %}
+        </div>
+        <div class="nav-right">
+            <div class="user-profile">
+                <i data-lucide="user-circle"></i> {{ current_user.username }}
+            </div>
+            <a href="{{ url_for('logout') }}" class="btn-logout"><i data-lucide="log-out"></i> Logout</a>
+        </div>
+    </nav>
+
+    <main class="dashboard-container">
+        <section class="activity-panel glass-panel">
+            <div class="card-header border-bottom pb-3">
+                <h3 class="font-space m-0 text-gray">ACCESS LOGS</h3>
+                <i data-lucide="database" class="text-gray"></i>
+            </div>
+            
+            <div class="filter-controls mt-4">
+                <input type="date" id="date-filter" aria-label="Filter by Date">
+                <button class="btn-clear" id="btn-clear-filter">
+                    <i data-lucide="x"></i> Clear Filter
+                </button>
+                <div style="flex-grow: 1;"></div>
+                <button class="btn-export" id="btn-export">
+                    <i data-lucide="download"></i> Export Excel
+                </button>
+            </div>
+            
+            <div class="filter-status" id="filter-status-text">
+                Showing: All logs
+            </div>
+
+            <div class="table-responsive mt-3">
+                <table class="activity-table">
+                    <thead>
+                        <tr>
+                            <th>NAME</th>
+                            <th>ENROLLMENT</th>
+                            <th>ROLE</th>
+                            <th>COMMITTEE</th>
+                            <th>TIMESTAMP</th>
+                            <th>ACCESS</th>
+                            <th>ATTENDANCE</th>
+                        </tr>
+                    </thead>
+                    <tbody id="logs-tbody">
+                        <tr><td colspan="7" style="text-align: center;">Loading...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </section>
+    </main>
+
+    <script src="{{ url_for('static', filename='js/access_logs.js') }}"></script>
+    <script>
+        lucide.createIcons();
+    </script>
+</body>
+</html>

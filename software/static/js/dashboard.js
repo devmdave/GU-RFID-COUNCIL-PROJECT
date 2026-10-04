@@ -139,3 +139,141 @@ function closeModal() {
 }
 
 modalClose.addEventListener('click', closeModal);
+
+// --- Add User / Card Writing Logic ---
+const btnAddUser = document.getElementById('btn-add-user');
+const addUserModal = document.getElementById('add-user-modal');
+const addUserForm = document.getElementById('add-user-form');
+const writingModal = document.getElementById('writing-modal');
+const btnCancelWrite = document.getElementById('btn-cancel-write');
+
+let serialEventSource = null;
+let currentPendingNumber = null;
+
+if (btnAddUser) {
+    btnAddUser.addEventListener('click', () => {
+        addUserModal.classList.add('active');
+    });
+}
+
+if (addUserForm) {
+    addUserForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        
+        const name = document.getElementById('new-name').value;
+        const enrollment = document.getElementById('new-enrollment').value;
+        const role = document.getElementById('new-role').value;
+        const committee = document.getElementById('new-committee').value;
+        
+        try {
+            const res = await fetch('/api/cards/new', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ name, enrollment, role, committee })
+            });
+            const data = await res.json();
+            
+            if (data.success) {
+                addUserModal.classList.remove('active');
+                currentPendingNumber = data.number;
+                
+                // Set modal details
+                document.getElementById('write-user-name').textContent = name;
+                document.getElementById('write-user-enrollment').textContent = enrollment;
+                document.getElementById('write-card-number').textContent = currentPendingNumber;
+                
+                // Reset status UI
+                document.getElementById('write-status-text').innerHTML = '🟡 Waiting for card...<br><span class="text-gray text-sm">Please place the NFC card on the RC522 reader.</span>';
+                document.getElementById('write-status-icon').innerHTML = '<i data-lucide="loader" class="spin text-cyan" style="width: 48px; height: 48px;"></i>';
+                btnCancelWrite.style.display = 'block';
+                
+                lucide.createIcons();
+                writingModal.classList.add('active');
+                
+                startSerialStream();
+            } else {
+                alert('Error: ' + data.error);
+            }
+        } catch (err) {
+            console.error(err);
+            alert('Error creating pending card.');
+        }
+    });
+}
+
+function startSerialStream() {
+    if (serialEventSource) {
+        serialEventSource.close();
+    }
+    serialEventSource = new EventSource('/api/device/serial-stream');
+    
+    serialEventSource.onmessage = async function(event) {
+        try {
+            const data = JSON.parse(event.data);
+            if (data.type === 'serial' && data.line) {
+                const line = data.line.trim();
+                
+                if (line === 'CARD_DETECTED') {
+                    document.getElementById('write-status-text').textContent = 'Card detected. Writing card...';
+                } else if (line === 'WRITING_CARD') {
+                    document.getElementById('write-status-text').textContent = 'Writing card...';
+                } else if (line === 'WRITE_SUCCESS') {
+                    document.getElementById('write-status-text').innerHTML = `✅ Card Written Successfully<br><br>Name: ${document.getElementById('write-user-name').textContent}<br>Enrollment: ${document.getElementById('write-user-enrollment').textContent}<br>Card Number: ${currentPendingNumber}`;
+                    document.getElementById('write-status-icon').innerHTML = '<i data-lucide="check-circle" class="text-green" style="width: 48px; height: 48px;"></i>';
+                    btnCancelWrite.style.display = 'none';
+                    lucide.createIcons();
+                    
+                    // Activate in DB
+                    try {
+                        await fetch('/api/cards/activate', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ number: currentPendingNumber })
+                        });
+                    } catch (e) { console.error(e); }
+                    
+                    setTimeout(() => {
+                        writingModal.classList.remove('active');
+                        if (serialEventSource) serialEventSource.close();
+                        addUserForm.reset();
+                    }, 4000);
+                    
+                } else if (line === 'WRITE_FAILED') {
+                    document.getElementById('write-status-text').innerHTML = '❌ Card Writing Failed<br><span class="text-gray text-sm">Please try again.</span>';
+                    document.getElementById('write-status-icon').innerHTML = '<i data-lucide="x-circle" class="text-red" style="width: 48px; height: 48px; color: var(--status-red);"></i>';
+                    lucide.createIcons();
+                    
+                    try {
+                        await fetch('/api/cards/cancel', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ number: currentPendingNumber })
+                        });
+                    } catch (e) {}
+                    
+                    setTimeout(() => {
+                        writingModal.classList.remove('active');
+                        if (serialEventSource) serialEventSource.close();
+                    }, 3000);
+                }
+            }
+        } catch(e) {}
+    };
+}
+
+if (btnCancelWrite) {
+    btnCancelWrite.addEventListener('click', async () => {
+        try {
+            await fetch('/api/cards/cancel', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ number: currentPendingNumber })
+            });
+        } catch (e) {}
+        
+        writingModal.classList.remove('active');
+        if (serialEventSource) {
+            serialEventSource.close();
+        }
+    });
+}
