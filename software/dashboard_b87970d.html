@@ -1,10 +1,36 @@
-{% extends "base.html" %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RFID ACCESS - Dashboard</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <script src="https://unpkg.com/lucide@latest"></script>
+</head>
+<body>
+    <nav class="navbar glass-panel">
+        <div class="nav-left">
+            <i data-lucide="shield-check" class="text-cyan"></i>
+            <span class="nav-brand font-space">RFID ACCESS</span>
+            <a href="{{ url_for('dashboard') }}" class="nav-link active">Dashboard</a>
+            <a href="{{ url_for('access_logs_page') }}" class="nav-link">Access Logs</a>
+            {% if current_user.role.name in ['superadmin', 'admin'] %}
+            <a href="{{ url_for('settings') }}" class="nav-link">Settings</a>
+            {% endif %}
+        </div>
+        <div class="nav-right">
+            <div class="status-indicator" id="nav-status-indicator">
+                <span class="pulse-dot"></span> System Online
+            </div>
+            <div class="user-profile">
+                <i data-lucide="user-circle"></i> Admin
+            </div>
+            <a href="{{ url_for('logout') }}" class="btn-logout"><i data-lucide="log-out"></i> Logout</a>
+        </div>
+    </nav>
 
-{% block title %}Dashboard{% endblock %}
-{% block page_title %}DASHBOARD{% endblock %}
-
-{% block content %}
-<main class="dashboard-container">
+    <main class="dashboard-container">
         <!-- Main Scan Panel -->
         <section class="scan-panel glass-panel">
             <h2 class="font-space section-title">RFID ACCESS CONTROL</h2>
@@ -24,13 +50,30 @@
 
         <!-- Status Cards -->
         <section class="status-grid">
-
+            <div class="status-card glass-panel">
+                <div class="card-header">
+                    <span class="text-gray text-sm font-space">BACKEND</span>
+                    <i data-lucide="server" class="text-gray"></i>
+                </div>
+                <div class="card-value text-green">
+                    <span class="dot bg-green"></span> ONLINE
+                </div>
+            </div>
+            <div class="status-card glass-panel">
+                <div class="card-header">
+                    <span class="text-gray text-sm font-space">DATABASE</span>
+                    <i data-lucide="database" class="text-gray"></i>
+                </div>
+                <div class="card-value text-green">
+                    <span class="dot bg-green"></span> ONLINE
+                </div>
+            </div>
             <div class="status-card glass-panel">
                 <div class="card-header">
                     <span class="text-gray text-sm font-space">NODEMCU</span>
                     <i data-lucide="cpu" class="text-gray"></i>
                 </div>
-                <div class="card-value text-cyan" id="status-rfid-value">
+                <div class="card-value text-cyan" id="status-rfid-value" style="display: flex; flex-direction: column; align-items: flex-start;">
                     READY
                 </div>
             </div>
@@ -39,7 +82,7 @@
                     <span class="text-gray text-sm font-space">NETWORK</span>
                     <i data-lucide="wifi" class="text-gray"></i>
                 </div>
-                <div class="card-value text-green" id="status-network-value">
+                <div class="card-value text-green" id="status-network-value" style="display: flex; flex-direction: column; align-items: flex-start;">
                     <span class="dot bg-green"></span> CONNECTED
                 </div>
             </div>
@@ -54,8 +97,8 @@
                         <i data-lucide="activity" class="text-gray"></i>
                     </div>
                     {% if current_user.role.name in ['superadmin', 'admin'] %}
-                    <button id="btn-add-user" class="btn-primary">
-                        <i data-lucide="user-plus" style="width:18px; height:18px;"></i> Add User
+                    <button id="btn-add-user" class="btn-primary" style="padding: 8px 15px; width: auto; font-size: 14px;">
+                        <i data-lucide="user-plus"></i> Add User
                     </button>
                     {% endif %}
                 </div>
@@ -80,7 +123,7 @@
             </section>
         </div>
     </main>
-    
+
     <!-- Access Modal -->
     <div id="access-modal" class="modal-overlay">
         <div class="modal-card glass-panel" id="modal-content">
@@ -149,9 +192,11 @@
             <button id="btn-cancel-write" class="btn-logout" style="width: 100%; justify-content: center; padding: 12px; background: rgba(239, 68, 68, 0.1); color: var(--status-red); border: 1px solid rgba(239, 68, 68, 0.3);">Cancel</button>
         </div>
     </div>
-{% endblock %}
 
-{% block scripts %}
-<script src="{{ url_for('static', filename='js/dashboard.js') }}"></script>
-<script src="{{ url_for('static', filename='js/status.js') }}"></script>
-{% endblock %}
+    <script src="{{ url_for('static', filename='js/dashboard.js') }}"></script>
+    <script>
+        lucide.createIcons();
+    </script>
+    <script src="{{ url_for('static', filename='js/status.js') }}"></script>
+</body>
+</html>

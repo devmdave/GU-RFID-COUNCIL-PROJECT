@@ -8,50 +8,99 @@
         <h2 class="font-space section-title">NODEMCU USB CONFIGURATION</h2>
         
         <!-- Wireless Status Display -->
-        <div class="wireless-status-container"></div>
+        <div class="wireless-status-container" style="margin-bottom: 32px;"></div>
         
-        <div class="bottom-grid" style="grid-template-columns: 1fr; gap: 20px; align-items: start; max-width: 800px; margin: 0 auto;">
+        <div class="bottom-grid" style="grid-template-columns: 1fr; gap: 20px; align-items: start; max-width: 900px; margin: 0 auto;">
             <!-- Device Configuration -->
-            <section class="config-panel glass-panel">
-                <div class="card-header border-bottom pb-3">
-                    <h3 class="font-space m-0 text-gray">CONFIGURE DEVICE</h3>
-                    <i data-lucide="usb" class="text-gray"></i>
+            <section class="config-panel glass-panel" style="display: flex; flex-direction: column; padding: 0;">
+                <div class="card-header border-bottom pb-3" style="padding: 24px 32px 16px 32px; display: flex; justify-content: space-between; align-items: center;">
+                    <div style="display: flex; align-items: center; gap: 10px;">
+                        <h3 class="font-space m-0 text-gray">CONFIGURE DEVICE</h3>
+                        <i data-lucide="usb" class="text-gray"></i>
+                    </div>
                 </div>
-                <div class="mt-4">
+                <div style="padding: 24px 32px 24px 32px;">
                     <form id="config-form">
-                        <div class="form-group">
-                            <label class="form-label">COM Port</label>
-                            <div style="display: flex; gap: 12px;">
-                                <select id="serial_port" class="form-control" required>
-                                    <option value="" disabled selected>Select COM Port</option>
-                                </select>
-                                <button type="button" id="refresh-ports" class="btn-secondary">
-                                    <i data-lucide="refresh-cw" style="width:16px;height:16px;"></i> Refresh
-                                </button>
+                        
+                        <!-- 1. DEVICE CONNECTION -->
+                        <div class="settings-group">
+                            <div class="settings-group-header">
+                                <div class="icon-wrap"><i data-lucide="plug"></i></div>
+                                <div class="header-text">
+                                    <h4>DEVICE CONNECTION</h4>
+                                    <p>Select the USB COM port for NodeMCU</p>
+                                </div>
                             </div>
-                        </div>
-                        <div class="form-group">
-                            <label class="form-label">Wi-Fi SSID</label>
-                            <input type="text" id="wifi_ssid" class="form-control" required>
-                        </div>
-                        <div class="form-group">
-                            <label class="form-label">Wi-Fi Password</label>
-                            <div style="display: flex; gap: 12px;">
-                                <input type="password" id="wifi_password" class="form-control" required>
-                                <button type="button" id="toggle-password" class="btn-secondary">
-                                    <i data-lucide="eye" style="width:16px;height:16px;"></i>
-                                </button>
+                            <div class="settings-group-body">
+                                <div class="form-group m-0">
+                                    <label class="form-label">COM Port</label>
+                                    <div style="display: flex; gap: 16px;">
+                                        <select id="serial_port" class="form-control form-control-premium" style="flex-grow: 1;" required>
+                                            <option value="" disabled selected>Select COM Port</option>
+                                        </select>
+                                        <button type="button" id="refresh-ports" class="btn-secondary" style="height: 46px;">
+                                            <i data-lucide="refresh-cw" style="width:16px;height:16px;"></i> Refresh
+                                        </button>
+                                    </div>
+                                    <div style="font-size: 12px; color: var(--text-dark); margin-top: 8px;">
+                                        <i data-lucide="info" style="width:12px;height:12px;vertical-align:text-bottom;margin-right:4px;"></i> Select the port where your device is plugged in. Auto-detected port will be pre-selected if available.
+                                    </div>
+                                </div>
                             </div>
-                        </div>
-                        <div class="form-group">
-                            <label class="form-label">Server URL</label>
-                            <input type="url" id="server_url" class="form-control" required>
                         </div>
                         
-                        <div style="display: flex; justify-content: flex-end; align-items: center; margin-top: 32px;">
-                            <button id="save-btn" type="submit" class="btn-primary">Save to Device via USB</button>
+                        <!-- 2. NETWORK CONFIGURATION -->
+                        <div class="settings-group">
+                            <div class="settings-group-header">
+                                <div class="icon-wrap"><i data-lucide="wifi"></i></div>
+                                <div class="header-text">
+                                    <h4>NETWORK CONFIGURATION</h4>
+                                    <p>Target Wi-Fi credentials for device connection</p>
+                                </div>
+                            </div>
+                            <div class="settings-group-body">
+                                <div class="form-row">
+                                    <div class="form-group m-0" style="flex: 1;">
+                                        <label class="form-label">Wi-Fi SSID</label>
+                                        <input type="text" id="wifi_ssid" class="form-control form-control-premium" placeholder="Enter network name" required>
+                                    </div>
+                                    
+                                    <div class="form-group m-0" style="flex: 1;">
+                                        <label class="form-label">Wi-Fi Password</label>
+                                        <div class="input-with-button">
+                                            <input type="password" id="wifi_password" class="form-control form-control-premium" style="width: 100%;" placeholder="Enter network password" required>
+                                            <button type="button" id="toggle-password" class="btn-input-integrated">
+                                                <i data-lucide="eye" style="width:18px;height:18px;"></i>
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
                         </div>
-                        <div id="config-message" style="margin-top: 16px; font-size: 14px; min-height: 20px; text-align: right;"></div>
+                        
+                        <!-- 3. SERVER CONFIGURATION -->
+                        <div class="settings-group">
+                            <div class="settings-group-header">
+                                <div class="icon-wrap"><i data-lucide="server"></i></div>
+                                <div class="header-text">
+                                    <h4>SERVER CONFIGURATION</h4>
+                                    <p>Backend API endpoint URL</p>
+                                </div>
+                            </div>
+                            <div class="settings-group-body">
+                                <div class="form-group m-0">
+                                    <label class="form-label">Server URL</label>
+                                    <input type="url" id="server_url" class="form-control form-control-premium" placeholder="http://192.168.x.x:5000" required>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div style="display: flex; justify-content: flex-end; align-items: center; margin-top: 32px; gap: 16px;">
+                            <div id="config-message" style="font-size: 13px; font-weight: 500;"></div>
+                            <button id="save-btn" type="submit" class="btn-primary" style="height: 48px; font-size: 15px; padding: 0 24px;">
+                                <i data-lucide="save" style="width: 18px; height: 18px;"></i> Save to Device via USB
+                            </button>
+                        </div>
                     </form>
                 </div>
             </section>

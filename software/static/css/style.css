@@ -373,8 +373,12 @@ body, html {
 /* Status Cards Grid */
 .wireless-status-grid {
     display: flex;
-    gap: 32px;
-    margin-bottom: 24px;
+    gap: 48px;
+    background: rgba(0, 0, 0, 0.2);
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    padding: 16px 24px;
+    border-radius: 8px;
+    margin: 0;
 }
 
 .wireless-status-item {
@@ -533,9 +537,10 @@ body, html {
 .form-label {
     display: block;
     font-size: 13px;
-    color: var(--text-muted);
+    color: #e2e8f0;
     margin-bottom: 8px;
     font-weight: 500;
+    letter-spacing: 0.5px;
 }
 
 .form-control {
@@ -624,6 +629,118 @@ select.form-control {
     align-items: center;
     gap: 12px;
     font-size: 14px;
+}
+
+/* Premium Configuration Settings UI */
+.settings-group {
+    background: rgba(0, 0, 0, 0.15);
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    border-radius: 10px;
+    margin-bottom: 32px;
+    overflow: hidden;
+}
+
+.settings-group-header {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding: 20px 24px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+    background: rgba(255, 255, 255, 0.02);
+}
+
+.settings-group-header .icon-wrap {
+    width: 40px;
+    height: 40px;
+    border-radius: 8px;
+    background: rgba(34, 211, 238, 0.1);
+    color: var(--accent-cyan);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid rgba(34, 211, 238, 0.2);
+}
+
+.settings-group-header .icon-wrap i {
+    width: 20px;
+    height: 20px;
+}
+
+.settings-group-header .header-text h4 {
+    margin: 0 0 4px 0;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-main);
+    letter-spacing: 1px;
+}
+
+.settings-group-header .header-text p {
+    margin: 0;
+    font-size: 12px;
+    color: var(--text-muted);
+}
+
+.settings-group-body {
+    padding: 24px;
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+}
+
+.form-row {
+    display: flex;
+    gap: 24px;
+    width: 100%;
+}
+
+.form-control-premium {
+    height: 46px;
+    background: rgba(0, 0, 0, 0.3);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    padding: 0 16px;
+    border-radius: 8px;
+    font-size: 14px;
+    box-shadow: inset 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.form-control-premium:focus {
+    background: rgba(0, 0, 0, 0.4);
+    border-color: var(--accent-cyan);
+    box-shadow: 0 0 0 3px rgba(34, 211, 238, 0.15);
+}
+
+.input-with-button {
+    position: relative;
+    display: flex;
+    align-items: center;
+    width: 100%;
+}
+
+.input-with-button .form-control {
+    padding-right: 48px;
+}
+
+.btn-input-integrated {
+    position: absolute;
+    right: 4px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 38px;
+    height: 38px;
+    border-radius: 6px;
+    background: transparent;
+    border: none;
+    color: var(--text-muted);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s;
+}
+
+.btn-input-integrated:hover {
+    color: var(--text-main);
+    background: rgba(255, 255, 255, 0.05);
 }
 
 /* Modals */

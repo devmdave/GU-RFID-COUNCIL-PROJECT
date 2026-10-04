@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RFID ACCESS - Dashboard</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <script src="https://unpkg.com/lucide@latest"></script>
+</head>
+<body>
+    <nav class="navbar glass-panel">
+        <div class="nav-left">
+            <i data-lucide="shield-check" class="text-cyan"></i>
+            <span class="nav-brand font-space">RFID ACCESS</span>
+            <span class="nav-link active">Dashboard</span>
+        </div>
+        <div class="nav-right">
+            <div class="status-indicator">
+                <span class="pulse-dot"></span> System Online
+            </div>
+            <div class="user-profile">
+                <i data-lucide="user-circle"></i> Admin
+            </div>
+            <a href="{{ url_for('logout') }}" class="btn-logout"><i data-lucide="log-out"></i> Logout</a>
+        </div>
+    </nav>
+
+    <main class="dashboard-container">
+        <!-- Main Scan Panel -->
+        <section class="scan-panel glass-panel">
+            <h2 class="font-space section-title">RFID ACCESS CONTROL</h2>
+            
+            <div class="scan-visual-container">
+                <div class="rfid-waves">
+                    <div class="wave wave-1"></div>
+                    <div class="wave wave-2"></div>
+                    <div class="wave wave-3"></div>
+                    <i data-lucide="contactless-payment" class="rfid-icon"></i>
+                </div>
+            </div>
+            
+            <h3 class="status-ready text-cyan">READY FOR SCAN</h3>
+            <p class="text-gray">Tap your RFID card on the reader</p>
+        </section>
+
+        <!-- Status Cards -->
+        <section class="status-grid">
+            <div class="status-card glass-panel">
+                <div class="card-header">
+                    <span class="text-gray text-sm font-space">BACKEND</span>
+                    <i data-lucide="server" class="text-gray"></i>
+                </div>
+                <div class="card-value text-green">
+                    <span class="dot bg-green"></span> ONLINE
+                </div>
+            </div>
+            <div class="status-card glass-panel">
+                <div class="card-header">
+                    <span class="text-gray text-sm font-space">DATABASE</span>
+                    <i data-lucide="database" class="text-gray"></i>
+                </div>
+                <div class="card-value text-green">
+                    <span class="dot bg-green"></span> ONLINE
+                </div>
+            </div>
+            <div class="status-card glass-panel">
+                <div class="card-header">
+                    <span class="text-gray text-sm font-space">RFID READER</span>
+                    <i data-lucide="cpu" class="text-gray"></i>
+                </div>
+                <div class="card-value text-cyan">
+                    READY
+                </div>
+            </div>
+            <div class="status-card glass-panel">
+                <div class="card-header">
+                    <span class="text-gray text-sm font-space">NETWORK</span>
+                    <i data-lucide="wifi" class="text-gray"></i>
+                </div>
+                <div class="card-value text-green">
+                    <span class="dot bg-green"></span> CONNECTED
+                </div>
+            </div>
+        </section>
+
+        <div class="bottom-grid">
+            <!-- Recent Activity -->
+            <section class="activity-panel glass-panel">
+                <div class="card-header border-bottom pb-3">
+                    <h3 class="font-space m-0 text-gray">RECENT ACTIVITY</h3>
+                    <i data-lucide="activity" class="text-gray"></i>
+                </div>
+                <div class="table-responsive mt-3">
+                    <table class="activity-table">
+                        <thead>
+                            <tr>
+                                <th>CARD NUMBER</th>
+                                <th>STATUS</th>
+                                <th>TIME</th>
+                            </tr>
+                        </thead>
+                        <tbody id="activity-tbody">
+                            <!-- Rows added via JS -->
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+        </div>
+    </main>
+
+    <!-- Access Modal -->
+    <div id="access-modal" class="modal-overlay">
+        <div class="modal-card glass-panel" id="modal-content">
+            <button class="modal-close" id="modal-close"><i data-lucide="x"></i></button>
+            <div class="modal-icon-container" id="modal-icon-bg">
+                <i data-lucide="check-circle" id="modal-icon" class="modal-main-icon"></i>
+            </div>
+            <h2 class="font-space mt-4 mb-2" id="modal-title">ACCESS GRANTED</h2>
+            <div class="modal-details">
+                <p class="text-gray text-sm m-0">Card Number:</p>
+                <p class="font-space text-lg m-0" id="modal-card-number">1234567890</p>
+            </div>
+            <p class="mt-4 mb-2 text-gray" id="modal-message">Access has been granted.</p>
+            <div class="modal-badge" id="modal-badge">
+                <i data-lucide="check"></i> VERIFIED
+            </div>
+        </div>
+    </div>
+
+    <script src="{{ url_for('static', filename='js/dashboard.js') }}"></script>
+    <script>
+        lucide.createIcons();
+    </script>
+</body>
+</html>

@@ -225,7 +225,7 @@ def verify():
         
     card = Card.query.filter_by(number=number).first()
     if not card or not card.active:
-        return jsonify({"success": False, "access": "denied", "message": "Card not found or inactive"})
+        return jsonify({"success": True, "access": "denied", "message": "Card not found or inactive"})
         
     now = get_ist_time()
     
@@ -271,7 +271,7 @@ def verify():
                 
             return jsonify({
                 "success": True,
-                "access": "exit",
+                "access": "granted",
                 "attendance": "counted",
                 "logged": True
             })
@@ -287,7 +287,7 @@ def verify():
                 
             return jsonify({
                 "success": True,
-                "access": "blocked",
+                "access": "denied",
                 "attendance": "not_counted",
                 "logged": False,
                 "message": "Attendance will not be counted. Minimum 15 minutes are required between Entry and Exit."
@@ -327,7 +327,7 @@ def verify():
             
         return jsonify({
             "success": True,
-            "access": "entry",
+            "access": "granted",
             "attendance": "pending",
             "logged": True
         })
