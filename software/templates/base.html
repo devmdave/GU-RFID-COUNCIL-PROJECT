@@ -39,25 +39,17 @@
                 </a>
                 
                 <div class="nav-section">TOOLS</div>
-                <a href="{{ url_for('settings') }}#serial-monitor" class="nav-item">
+                <a href="{{ url_for('serial_monitor') }}" class="nav-item {% if request.endpoint == 'serial_monitor' %}active{% endif %}">
                     <i data-lucide="terminal"></i> Serial Monitor
-                </a>
-                <a href="{{ url_for('settings') }}#config" class="nav-item">
-                    <i data-lucide="usb"></i> Device Configuration
                 </a>
                 
                 <div class="nav-section">SYSTEM</div>
                 <a href="{{ url_for('settings') }}" class="nav-item {% if request.endpoint == 'settings' %}active{% endif %}">
-                    <i data-lucide="settings"></i> Settings
+                    <i data-lucide="settings"></i> Device Configuration
                 </a>
                 {% endif %}
                 
-                {% if current_user.role.name == 'superadmin' %}
-                <div class="nav-section">SUPERADMIN</div>
-                <a href="{{ url_for('superadmin_logs') }}" class="nav-item {% if request.endpoint == 'superadmin_logs' %}active{% endif %}">
-                    <i data-lucide="shield-alert"></i> Audit Logs
-                </a>
-                {% endif %}
+
             </nav>
             
             <div class="sidebar-footer">

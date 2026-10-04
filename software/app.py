@@ -162,6 +162,12 @@ def access_logs_page():
 def settings():
     return render_template('settings.html')
 
+@app.route('/serial-monitor')
+@login_required
+@role_required('superadmin', 'admin')
+def serial_monitor():
+    return render_template('serial_monitor.html')
+
 @app.route('/users')
 @login_required
 @role_required('superadmin', 'admin')

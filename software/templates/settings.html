@@ -1,20 +1,20 @@
 {% extends "base.html" %}
 
-{% block title %}Settings{% endblock %}
-{% block page_title %}SETTINGS{% endblock %}
+{% block title %}Device Configuration{% endblock %}
+{% block page_title %}DEVICE CONFIGURATION{% endblock %}
 
 {% block content %}
 <main class="dashboard-container">
-        <h2 class="font-space section-title">SYSTEM SETTINGS</h2>
+        <h2 class="font-space section-title">NODEMCU USB CONFIGURATION</h2>
         
         <!-- Wireless Status Display -->
         <div class="wireless-status-container"></div>
         
-        <div class="bottom-grid" style="grid-template-columns: 1fr 1fr; gap: 20px; align-items: start;">
+        <div class="bottom-grid" style="grid-template-columns: 1fr; gap: 20px; align-items: start; max-width: 600px;">
             <!-- Device Configuration -->
             <section class="config-panel glass-panel">
                 <div class="card-header border-bottom pb-3">
-                    <h3 class="font-space m-0 text-gray">NODEMCU USB CONFIGURATION</h3>
+                    <h3 class="font-space m-0 text-gray">CONFIGURE DEVICE</h3>
                     <i data-lucide="usb" class="text-gray"></i>
                 </div>
                 <div class="mt-4">
@@ -51,53 +51,146 @@
                     </form>
                 </div>
             </section>
-
-            <!-- Serial Monitor -->
-            <section class="config-panel glass-panel" style="display: flex; flex-direction: column; height: 100%;">
-                <div class="card-header border-bottom pb-3" style="display: flex; justify-content: space-between; align-items: center;">
-                    <div style="display: flex; align-items: center; gap: 10px;">
-                        <h3 class="font-space m-0 text-gray">USB DEVICE</h3>
-                        <i data-lucide="terminal" class="text-gray"></i>
-                    </div>
-                    <div style="display: flex; align-items: center; gap: 5px; font-size: 12px; font-weight: bold;">
-                        <span id="serial-status-dot" class="pulse-dot" style="background-color: var(--status-red);"></span>
-                        <span id="serial-status-text" class="text-gray">DISCONNECTED</span>
-                    </div>
-                </div>
-                
-                <div id="device-info-container" class="mt-3 mb-3 p-3" style="background: rgba(255,255,255,0.05); border-radius: 4px; border: 1px solid rgba(255,255,255,0.1);">
-                    <div style="display: flex; justify-content: space-between; align-items: center;">
-                        <div>
-                            <div style="font-weight: bold; margin-bottom: 5px; color: var(--text-light);" id="device-name-display">NodeMCU Not Detected</div>
-                            <div class="text-sm text-gray" id="serial-port-info">No port selected • 115200 baud</div>
-                        </div>
-                        <div id="auto-detected-badge" style="display: none; background: rgba(0, 255, 0, 0.1); color: #0f0; padding: 2px 8px; border-radius: 12px; font-size: 11px; font-weight: bold; border: 1px solid rgba(0, 255, 0, 0.2);">
-                            Auto-detected
-                        </div>
-                    </div>
-                    
-                    <!-- Manual Fallback -->
-                    <div id="manual-fallback-container" style="margin-top: 15px; padding-top: 15px; border-top: 1px dashed rgba(255,255,255,0.1); display: none;">
-                        <label class="text-gray text-sm" style="display: block; margin-bottom: 5px;">Manual Override:</label>
-                        <div style="display: flex; gap: 10px;">
-                            <select id="serial_port" style="flex-grow: 1; padding: 8px; background: rgba(0,0,0,0.2); border: 1px solid rgba(255,255,255,0.1); color: white; border-radius: 4px;">
-                                <option value="">Select COM Port...</option>
-                            </select>
-                            <button type="button" id="refresh-ports" style="padding: 8px 15px; background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2); color: white; border-radius: 4px; cursor: pointer;">Refresh</button>
-                        </div>
-                    </div>
-                </div>
-                
-                <div style="margin-bottom: 5px; font-size: 12px; color: var(--text-gray); font-weight: bold;">Serial Monitor</div>
-                <div id="serial-output" style="flex-grow: 1; background: rgba(0,0,0,0.5); border: 1px solid rgba(255,255,255,0.1); border-radius: 4px; padding: 10px; font-family: monospace; color: #0f0; font-size: 13px; overflow-y: auto; height: 300px; white-space: pre-wrap; word-wrap: break-word;"></div>
-                <div style="display: flex; justify-content: flex-end; margin-top: 15px;">
-                    <button type="button" id="clear-serial-btn" style="padding: 8px 15px; background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2); color: white; border-radius: 4px; cursor: pointer;">Clear Output</button>
-                </div>
-            </section>
         </div>
-    </main>
+</main>
 {% endblock %}
 
 {% block scripts %}
-<!-- Scripts here if needed -->
+<script>
+    document.addEventListener('DOMContentLoaded', () => {
+        initDeviceConfig();
+    });
+
+    async function fetchSerialPorts() {
+        try {
+            const res = await fetch('/api/device/serial-ports');
+            if (!res.ok) return;
+            const data = await res.json();
+            
+            const select = document.getElementById('serial_port');
+            if (!select) return;
+            
+            const currentValue = select.value;
+            select.innerHTML = '<option value="">Select COM Port...</option>';
+            
+            if (data.success && data.devices) {
+                data.devices.forEach(p => {
+                    const opt = document.createElement('option');
+                    opt.value = p.port;
+                    let desc = p.description ? ` - ${p.description}` : '';
+                    if (p.device === 'NodeMCU') desc += ' (NodeMCU)';
+                    opt.textContent = `${p.port}${desc}`;
+                    opt.style.color = 'black'; // fallback for dropdown UI visibility in some browsers
+                    select.appendChild(opt);
+                });
+                if (data.selected_port) {
+                    select.value = data.selected_port;
+                } else if (currentValue) {
+                    select.value = currentValue;
+                }
+            } else if (data.success && data.ports && data.ports.length > 0) {
+                // Handle alternate port format if it exists
+                data.ports.forEach(port => {
+                    const opt = document.createElement('option');
+                    opt.value = port.device;
+                    opt.textContent = `${port.device} - ${port.description}`;
+                    opt.style.color = 'black';
+                    select.appendChild(opt);
+                });
+            } else {
+                const opt = document.createElement('option');
+                opt.value = "";
+                opt.disabled = true;
+                opt.textContent = "No COM ports found";
+                select.appendChild(opt);
+            }
+        } catch (err) {
+            console.error("Error fetching serial ports:", err);
+        }
+    }
+
+    async function initDeviceConfig() {
+        fetchSerialPorts();
+        
+        const refreshBtn = document.getElementById('refresh-ports');
+        if (refreshBtn) {
+            refreshBtn.addEventListener('click', async () => {
+                refreshBtn.disabled = true;
+                refreshBtn.innerHTML = 'Refreshing...';
+                await fetchSerialPorts();
+                refreshBtn.disabled = false;
+                refreshBtn.innerHTML = '<i data-lucide="refresh-cw" style="width:16px;height:16px;"></i> Refresh';
+                if (window.lucide) lucide.createIcons();
+            });
+        }
+        
+        const toggleBtn = document.getElementById('toggle-password');
+        if (toggleBtn) {
+            toggleBtn.addEventListener('click', () => {
+                const pwInput = document.getElementById('wifi_password');
+                if (pwInput.type === 'password') {
+                    pwInput.type = 'text';
+                    toggleBtn.innerHTML = '<i data-lucide="eye-off" style="width:16px;height:16px;"></i>';
+                } else {
+                    pwInput.type = 'password';
+                    toggleBtn.innerHTML = '<i data-lucide="eye" style="width:16px;height:16px;"></i>';
+                }
+                if (window.lucide) lucide.createIcons();
+            });
+        }
+
+        const configForm = document.getElementById('config-form');
+        if (configForm) {
+            configForm.addEventListener('submit', async (e) => {
+                e.preventDefault();
+                const msgEl = document.getElementById('config-message');
+                const btn = document.getElementById('save-btn');
+                
+                btn.disabled = true;
+                btn.textContent = 'Configuring device...';
+                msgEl.textContent = '';
+                msgEl.style.color = 'var(--text-muted)';
+                
+                try {
+                    const response = await fetch('/api/device/configure-usb', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            port: document.getElementById('serial_port').value || 'auto',
+                            wifi_ssid: document.getElementById('wifi_ssid').value,
+                            wifi_password: document.getElementById('wifi_password').value,
+                            server_url: document.getElementById('server_url').value
+                        })
+                    });
+                    
+                    const data = await response.json();
+                    btn.disabled = false;
+                    btn.textContent = 'Save to Device via USB';
+                    
+                    if (response.status === 403) {
+                        msgEl.textContent = data.message || 'Permission denied. You do not have access to configure via USB.';
+                        msgEl.style.color = 'var(--status-red)';
+                        return;
+                    }
+                    
+                    if (data.success) {
+                        msgEl.textContent = 'Device configuration saved successfully.';
+                        msgEl.style.color = 'var(--status-green)';
+                        // Clear password field for safety
+                        document.getElementById('wifi_password').value = '';
+                    } else {
+                        msgEl.textContent = data.error || data.message || 'Failed to save configuration';
+                        msgEl.style.color = 'var(--status-red)';
+                    }
+                } catch (err) {
+                    btn.disabled = false;
+                    btn.textContent = 'Save to Device via USB';
+                    msgEl.textContent = 'Network error communicating with Flask backend.';
+                    msgEl.style.color = 'var(--status-red)';
+                }
+            });
+        }
+    }
+</script>
+<script src="{{ url_for('static', filename='js/status.js') }}"></script>
 {% endblock %}
